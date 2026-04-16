@@ -207,21 +207,23 @@ function _voidField(surf, wx_world, wy_world, wz_world) {
 
 // Public field evaluator for noise JSON
 // wx_world/wy_world/wz_world are in world space [-5,5]³
-// Noise coords = world * freq  (matches GridGenerator exactly — no SCALE needed here)
+// Noise coords = world * scale * freq  (matches GridGenerator exactly)
 function evaluateNoise(json, wx_world, wy_world, wz_world, noiseMin, noiseMax) {
   var surf = json.surface;
   var geom = json.geometry || {};
   var freq = surf.frequency || 0.3;
-  // Box SDF — clips scaffold to the grid boundary, matching the tool's sceneSDF
+  var sx = surf.scale_x != null ? surf.scale_x : 1.0;
+  var sy = surf.scale_y != null ? surf.scale_y : 1.0;
+  var sz = surf.scale_z != null ? surf.scale_z : 1.0;
+  // Box SDF — clips scaffold to the grid boundary
   var bx = Math.abs(wx_world) - 5.0;
   var by = Math.abs(wy_world) - 5.0;
   var bz = Math.abs(wz_world) - 5.0;
-  var boxDist = Math.max(bx, by, bz);  // negative inside box, positive outside
+  var boxDist = Math.max(bx, by, bz);
   var scaffold = _evalNoiseField(surf, geom, noiseMin, noiseMax,
-    wx_world * freq,
-    wy_world * freq,
-    wz_world * freq);
-  // Intersect scaffold with box — caps open surfaces at grid boundary
+    wx_world * freq * sx,
+    wy_world * freq * sy,
+    wz_world * freq * sz);
   var sdf = Math.max(scaffold, boxDist);
   if(surf.void_enabled) {
     var vf = _voidField(surf, wx_world, wy_world, wz_world);
@@ -265,16 +267,18 @@ function sampleGrid(json, N, statusCb) {
   var surf = json.surface;
   var geom = json.geometry || {};
   var freq = surf.frequency || 0.3;
+  var scx = surf.scale_x != null ? surf.scale_x : 1.0;
+  var scy = surf.scale_y != null ? surf.scale_y : 1.0;
+  var scz = surf.scale_z != null ? surf.scale_z : 1.0;
   var mn=Infinity, mx=-Infinity;
   var PP=16;
   for(var zi=0;zi<PP;zi++) for(var yi=0;yi<PP;yi++) for(var xi=0;xi<PP;xi++){
-    // World coords [-5,5] — matching GridGenerator domain
     var px=((xi/(PP-1))*2-1)*5.0;
     var py=((yi/(PP-1))*2-1)*5.0;
     var pz=((zi/(PP-1))*2-1)*5.0;
     var type = surf.noise_type || 'simplex';
     var raw;
-    var sx=px*freq, sy=py*freq, sz=pz*freq;  // no SCALE — matches GridGenerator
+    var sx=px*freq*scx, sy=py*freq*scy, sz=pz*freq*scz;
     if(type==='simplex')   raw=Noise.snoise(sx,sy,sz);
     else if(type==='cellular') raw=Noise.cellular(sx,sy,sz,surf.distance_metric||'euclidean');
     else if(type==='fbm')  raw=Noise.fbm(sx,sy,sz,surf.octaves||4,surf.lacunarity||2.0,surf.gain||0.5);

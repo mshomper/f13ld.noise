@@ -9,9 +9,12 @@
 html,body{min-height:100%;background:#06080f;color:#e0e0ff;font-family:system-ui,sans-serif}
 #container{display:flex;flex-direction:column;height:100vh}
 #cw{position:relative;background:#06080f;border-radius:12px 12px 0 0;overflow:hidden;border:0.5px solid #2a2a3a;flex:1;min-height:0;margin:16px 14px 0}
-canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges}
+canvas{display:block;width:100%;height:100%}
 #status{position:absolute;top:10px;right:10px;background:rgba(6,8,15,0.85);padding:5px 10px;border-radius:6px;font-size:11px;color:#555;pointer-events:none;border:0.5px solid #2a2a3a;z-index:10}
 #indicators{position:absolute;top:10px;left:10px;display:none;gap:8px;flex-direction:column;pointer-events:none;z-index:10}
+#qualityOverlay{position:absolute;bottom:10px;right:10px;display:none;gap:4px;z-index:10}
+#qualityOverlay button{background:rgba(6,8,15,0.85);color:#555;border:0.5px solid #2a2a3a;border-radius:5px;font-size:10px;padding:3px 7px;cursor:pointer;transition:color 0.15s,border-color 0.15s}
+#qualityOverlay button.active{color:#22d3ee;border-color:#22d3ee}
 .ind-pill{display:flex;align-items:center;gap:5px;background:rgba(6,8,15,0.85);padding:4px 8px;border-radius:6px;font-size:10px;border:0.5px solid #2a2a3a;white-space:nowrap}
 .ind-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .ind-label{color:#555;text-transform:uppercase;letter-spacing:0.06em}
@@ -70,6 +73,11 @@ input[type=number]{font-size:12px;padding:2px 4px;background:#1a1a2e;border:0.5p
         <span id="labelShader" style="color:#22d3ee;font-size:10px">ready</span>
       </div>
     </div>
+    <div id="qualityOverlay">
+      <button id="btnQLow"  class="active" onclick="onQualityChange('low')">Low</button>
+      <button id="btnQMed"  onclick="onQualityChange('medium')">Med</button>
+      <button id="btnQHigh" onclick="onQualityChange('high')">High</button>
+    </div>
   </div>
   <div id="panel">
 
@@ -91,6 +99,11 @@ input[type=number]{font-size:12px;padding:2px 4px;background:#1a1a2e;border:0.5p
         </div>
         <input type="range" id="slicePos" min="0" max="1" step="0.01" value="0.5" oninput="onSliceChange(this)">
         <span class="sv" id="sliceValue">0.50</span>
+        <div class="mode-strip" style="margin-left:6px">
+          <button class="mode-btn" id="btn64" onclick="onResChange(64)" title="Section resolution 64³">64</button>
+          <button class="mode-btn active" id="btn128" onclick="onResChange(128)" title="Section resolution 128³">128</button>
+          <button class="mode-btn" id="btn256" onclick="onResChange(256)" title="Section resolution 256³">256</button>
+        </div>
       </div>
     </div>
 
@@ -237,16 +250,6 @@ input[type=number]{font-size:12px;padding:2px 4px;background:#1a1a2e;border:0.5p
       </div>
     </div>
     <div id="voidHint" style="display:none;font-size:10px;color:#555;margin-top:4px;line-height:1.5">&#9888; Voids visible in Sheet 3D only — disabled in Section 2D for performance.</div>
-    <div class="surf-controls" style="margin-bottom:0">
-      <div class="sc-group" style="margin-bottom:0">
-        <label>resolution</label>
-        <div class="mode-strip">
-          <button class="mode-btn" id="btn64" onclick="onResChange(64)">64&#179;</button>
-          <button class="mode-btn active" id="btn128" onclick="onResChange(128)">128&#179;</button>
-          <button class="mode-btn" id="btn256" onclick="onResChange(256)">256&#179;</button>
-        </div>
-      </div>
-    </div>
 
     <hr class="divider">
 
@@ -322,11 +325,12 @@ input[type=number]{font-size:12px;padding:2px 4px;background:#1a1a2e;border:0.5p
   </div>
 </div>
 
-<script src="mesher.js"></script>
+<script src="mesher.js" onerror="console.warn('mesher.js not found — STL export unavailable')"></script>
 <script>
 var currentGrid = null;
 var currentViewMode = 'section';
 var currentResolution = 128;
+var currentQuality = 'low';
 var debounceTimer = null;
 var invertSolid = false;
 var voidEnabled = false;
@@ -349,6 +353,7 @@ function setShaderStatus(working){
 function showIndicators(show){
   document.getElementById('indicators').style.display = show ? 'flex' : 'none';
   document.getElementById('status').style.display     = show ? 'none' : 'block';
+  document.getElementById('qualityOverlay').style.display = show ? 'flex' : 'none';
 }
 
 function onSliceAxisChange(axis){
@@ -832,7 +837,9 @@ Raymarcher.prototype._buildFrag=function(params){
   var needsFbm=(type==='fbm'||type==='warp'||type==='ridged'||type==='billow');
   var voidEnabled=params.voidEnabled;
   var voidType=params.voidType||'spherical';
-  var qualIter=params.quality==='high'?'512':params.quality==='medium'?'256':'128';
+  var qualIter=isCurl
+    ?(params.quality==='high'?'256':params.quality==='medium'?'128':'64')
+    :(params.quality==='high'?'512':params.quality==='medium'?'256':'128');
   var octLit=String(oct);
 
   var simplexCode=[
@@ -972,13 +979,16 @@ Raymarcher.prototype._buildFrag=function(params){
     voidEnabled?voidCode:'',
     'float sampleNoise(vec3 p,float S){',
     ' vec3 sp=p*vec3(uScaleX,uScaleY,uScaleZ);',
-    ' if(sigma<0.001)return noiseField(sp*S);',
-    ' float e=sigma*0.5/max(S,0.01);float w=0.60653;',
-    ' float total=noiseField(sp*S);',
-    ' total+=w*(noiseField((sp+vec3(e,0,0))*S)+noiseField((sp-vec3(e,0,0))*S));',
-    ' total+=w*(noiseField((sp+vec3(0,e,0))*S)+noiseField((sp-vec3(0,e,0))*S));',
-    ' total+=w*(noiseField((sp+vec3(0,0,e))*S)+noiseField((sp-vec3(0,0,e))*S));',
-    ' return total/(1.0+6.0*w);}',
+    isCurl
+      // Curl: always single sample — smoothing would multiply cost by 7×
+      ?'return noiseField(sp*S);}'
+      :'if(sigma<0.001)return noiseField(sp*S);'+
+       'float e=sigma*0.5/max(S,0.01);float w=0.60653;'+
+       'float total=noiseField(sp*S);'+
+       'total+=w*(noiseField((sp+vec3(e,0,0))*S)+noiseField((sp-vec3(e,0,0))*S));'+
+       'total+=w*(noiseField((sp+vec3(0,e,0))*S)+noiseField((sp-vec3(0,e,0))*S));'+
+       'total+=w*(noiseField((sp+vec3(0,0,e))*S)+noiseField((sp-vec3(0,0,e))*S));'+
+       'return total/(1.0+6.0*w);}',
     'float implicit(vec3 p,float S){',
     ' float raw=sampleNoise(p,S);',
     ' float mid=(noiseMax+noiseMin)*0.5;',
@@ -988,7 +998,11 @@ Raymarcher.prototype._buildFrag=function(params){
     voidEnabled?' return max(scaffold,-voidField(p));':' return scaffold;',
     '}',
     'vec3 boxNormal(vec3 pos,float H){vec3 ap=abs(pos)/H;if(ap.x>ap.y&&ap.x>ap.z)return vec3(sign(pos.x),0.0,0.0);if(ap.y>ap.z)return vec3(0.0,sign(pos.y),0.0);return vec3(0.0,0.0,sign(pos.z));}',
-    'vec3 nrmNoise(vec3 p,float e,float S){float ex=implicit(p+vec3(e,0,0),S)-implicit(p-vec3(e,0,0),S);float ey=implicit(p+vec3(0,e,0),S)-implicit(p-vec3(0,e,0),S);float ez=implicit(p+vec3(0,0,e),S)-implicit(p-vec3(0,0,e),S);return normalize(vec3(ex,ey,ez));}',
+    isCurl
+      // 3-tap forward difference — 3 implicit calls vs 6, adequate for curl's smooth surfaces
+      ?'vec3 nrmNoise(vec3 p,float e,float S){float c=implicit(p,S);float ex=implicit(p+vec3(e,0,0),S)-c;float ey=implicit(p+vec3(0,e,0),S)-c;float ez=implicit(p+vec3(0,0,e),S)-c;return normalize(vec3(ex,ey,ez));}'
+      // 6-tap central difference — more accurate for sharp-featured noise types
+      :'vec3 nrmNoise(vec3 p,float e,float S){float ex=implicit(p+vec3(e,0,0),S)-implicit(p-vec3(e,0,0),S);float ey=implicit(p+vec3(0,e,0),S)-implicit(p-vec3(0,e,0),S);float ez=implicit(p+vec3(0,0,e),S)-implicit(p-vec3(0,0,e),S);return normalize(vec3(ex,ey,ez));}',
     'vec3 palette(float t){vec3 a=vec3(0.55,0.57,0.42),b=vec3(0.43,0.42,0.30),c=vec3(1.0,1.0,1.0),d=vec3(0.02,0.0,0.05);return clamp(a+b*cos(6.28318*(c*t+d)),0.0,1.0);}',
     'void main(){',
     ' vec2 uv=(gl_FragCoord.xy-res*0.5)/min(res.x,res.y);',
@@ -1149,9 +1163,8 @@ Raymarcher.prototype.render=function(){
   if(!this.prog)return;
   var cssW=this.canvas.clientWidth,cssH=this.canvas.clientHeight;
   if(cssW===0||cssH===0)return;
-  var MAX_DIM=420;
-  var scale=Math.min(1.0,MAX_DIM/Math.max(cssW,cssH));
-  var w=Math.round(cssW*scale),h=Math.round(cssH*scale);
+  var dpr=Math.min(window.devicePixelRatio||1,1.5);
+  var w=Math.round(cssW*dpr),h=Math.round(cssH*dpr);
   if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;}
   gl.viewport(0,0,w,h);
   gl.useProgram(this.prog);
@@ -1199,6 +1212,19 @@ Raymarcher.prototype._startLoop=function(){
   requestAnimationFrame(loop);
 };
 
+// WebGL context loss — typically caused by GPU TDR (driver timeout reset).
+// Curl noise is the most likely trigger on integrated GPUs.
+document.getElementById('glCanvas').addEventListener('webglcontextlost',function(e){
+  e.preventDefault();
+  raymarcher._compiling=false;
+  raymarcher.running=false;
+  setShaderStatus(false);
+  document.getElementById('status').textContent='GPU reset — reload page to recover';
+  document.getElementById('status').style.display='block';
+  document.getElementById('status').style.color='#ef4444';
+  console.warn('WebGL context lost — likely GPU TDR. Curl noise on large canvases is the most common cause. Try switching to Section 2D before using Curl, or reduce to Low quality.');
+});
+
 window.addEventListener('beforeunload',function(){
   if(typeof raymarcher!=='undefined'&&raymarcher.gl){
     if(raymarcher._pendingProg)raymarcher.gl.deleteProgram(raymarcher._pendingProg);
@@ -1233,7 +1259,8 @@ function getParams(){
     voidType:      voidType,
     holeFreq:      parseFloat(document.getElementById('holeFreq').value),
     holeRadius:    parseFloat(document.getElementById('holeRadius').value),
-    resolution:    currentResolution
+    resolution:    currentResolution,
+    quality:       currentQuality
   };
 }
 
@@ -1643,6 +1670,14 @@ function onResChange(res){
   document.getElementById('btn64').classList.toggle('active',res===64);
   document.getElementById('btn128').classList.toggle('active',res===128);
   document.getElementById('btn256').classList.toggle('active',res===256);
+  regenerate();
+}
+
+function onQualityChange(q){
+  currentQuality=q;
+  document.getElementById('btnQLow').classList.toggle('active',q==='low');
+  document.getElementById('btnQMed').classList.toggle('active',q==='medium');
+  document.getElementById('btnQHigh').classList.toggle('active',q==='high');
   regenerate();
 }
 
