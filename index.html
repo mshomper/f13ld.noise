@@ -11,6 +11,10 @@ html,body{min-height:100%;background:#06080f;color:#e0e0ff;font-family:system-ui
 #cw{position:relative;background:#06080f;border-radius:12px 12px 0 0;overflow:hidden;border:0.5px solid #2a2a3a;flex:1;min-height:0;margin:16px 14px 0}
 canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges}
 #status{position:absolute;top:10px;right:10px;background:rgba(6,8,15,0.85);padding:5px 10px;border-radius:6px;font-size:11px;color:#555;pointer-events:none;border:0.5px solid #2a2a3a}
+#indicators{position:absolute;top:10px;left:10px;display:none;gap:8px;flex-direction:column;pointer-events:none}
+.ind-pill{display:flex;align-items:center;gap:5px;background:rgba(6,8,15,0.85);padding:4px 8px;border-radius:6px;font-size:10px;border:0.5px solid #2a2a3a;white-space:nowrap}
+.ind-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.ind-label{color:#555;text-transform:uppercase;letter-spacing:0.06em}
 #panel{background:#111118;border:0.5px solid #2a2a3a;border-top:none;border-radius:0 0 12px 12px;padding:12px 14px;overflow-y:auto;max-height:52vh;margin:0 14px 14px}
 h1{font-size:13px;font-weight:500;color:#7c8aaa;letter-spacing:0.08em;text-transform:uppercase;margin:14px 14px 10px;flex-shrink:0}
 /* Dividers */
@@ -54,6 +58,18 @@ input[type=number]{font-size:12px;padding:2px 4px;background:#1a1a2e;border:0.5p
     <canvas id="glCanvas" style="display:none;"></canvas>
     <canvas id="sectionCanvas"></canvas>
     <div id="status">Ready</div>
+    <div id="indicators">
+      <div class="ind-pill">
+        <div class="ind-dot" id="dotNoise" style="background:#22d3ee"></div>
+        <span class="ind-label">noise</span>
+        <span id="labelNoise" style="color:#22d3ee;font-size:10px">ready</span>
+      </div>
+      <div class="ind-pill">
+        <div class="ind-dot" id="dotShader" style="background:#22d3ee"></div>
+        <span class="ind-label">shader</span>
+        <span id="labelShader" style="color:#22d3ee;font-size:10px">ready</span>
+      </div>
+    </div>
   </div>
   <div id="panel">
 
@@ -68,6 +84,11 @@ input[type=number]{font-size:12px;padding:2px 4px;background:#1a1a2e;border:0.5p
       </div>
       <div class="sc-group" id="sliceControl">
         <label>slice pos</label>
+        <div class="mode-strip" style="margin-right:4px">
+          <button class="mode-btn active" id="btnAxisZ" onclick="onSliceAxisChange('z')">Z</button>
+          <button class="mode-btn" id="btnAxisY" onclick="onSliceAxisChange('y')">Y</button>
+          <button class="mode-btn" id="btnAxisX" onclick="onSliceAxisChange('x')">X</button>
+        </div>
         <input type="range" id="slicePos" min="0" max="1" step="0.01" value="0.5" oninput="onSliceChange(this)">
         <span class="sv" id="sliceValue">0.50</span>
       </div>
@@ -102,6 +123,23 @@ input[type=number]{font-size:12px;padding:2px 4px;background:#1a1a2e;border:0.5p
       <label>frequency</label>
       <input type="range" id="frequency" min="0.01" max="1.0" step="0.01" value="0.30" oninput="onParamChange(this,'freqValue')">
       <span class="sv" id="freqValue">0.30</span>
+    </div>
+
+    <div class="sec-lbl" style="margin-top:8px">axis scaling</div>
+    <div class="sc-group">
+      <label>scale X</label>
+      <input type="range" id="scaleX" min="0.25" max="4.0" step="0.05" value="1.0" oninput="onParamChange(this,'scaleXValue')">
+      <span class="sv" id="scaleXValue">1.00</span>
+    </div>
+    <div class="sc-group">
+      <label>scale Y</label>
+      <input type="range" id="scaleY" min="0.25" max="4.0" step="0.05" value="1.0" oninput="onParamChange(this,'scaleYValue')">
+      <span class="sv" id="scaleYValue">1.00</span>
+    </div>
+    <div class="sc-group">
+      <label>scale Z</label>
+      <input type="range" id="scaleZ" min="0.25" max="4.0" step="0.05" value="1.0" oninput="onParamChange(this,'scaleZValue')">
+      <span class="sv" id="scaleZValue">1.00</span>
     </div>
 
     <div class="sc-group" id="octavesControl" style="display:none;">
@@ -198,16 +236,14 @@ input[type=number]{font-size:12px;padding:2px 4px;background:#1a1a2e;border:0.5p
         <span class="sv" id="holeRadiusValue">0.30</span>
       </div>
     </div>
-
-    <hr class="divider">
-
-    <!-- Resolution (section view) -->
+    <div id="voidHint" style="display:none;font-size:10px;color:#555;margin-top:4px;line-height:1.5">&#9888; Voids visible in Sheet 3D only — disabled in Section 2D for performance.</div>
     <div class="surf-controls" style="margin-bottom:0">
       <div class="sc-group" style="margin-bottom:0">
         <label>resolution</label>
         <div class="mode-strip">
-          <button class="mode-btn active" id="btn64" onclick="onResChange(64)">64&#179;</button>
-          <button class="mode-btn" id="btn128" onclick="onResChange(128)">128&#179;</button>
+          <button class="mode-btn" id="btn64" onclick="onResChange(64)">64&#179;</button>
+          <button class="mode-btn active" id="btn128" onclick="onResChange(128)">128&#179;</button>
+          <button class="mode-btn" id="btn256" onclick="onResChange(256)">256&#179;</button>
         </div>
       </div>
     </div>
@@ -290,11 +326,38 @@ input[type=number]{font-size:12px;padding:2px 4px;background:#1a1a2e;border:0.5p
 <script>
 var currentGrid = null;
 var currentViewMode = 'section';
-var currentResolution = 64;
+var currentResolution = 128;
 var debounceTimer = null;
 var invertSolid = false;
 var voidEnabled = false;
 var voidType = 'spherical';
+var currentSliceAxis = 'z';
+
+// ── Status indicators ─────────────────────────────────────────────────────
+var IND_READY   = '#22d3ee';
+var IND_WORKING = '#facc15';
+function setNoiseStatus(working){
+  document.getElementById('dotNoise').style.background  = working ? IND_WORKING : IND_READY;
+  document.getElementById('labelNoise').style.color     = working ? IND_WORKING : IND_READY;
+  document.getElementById('labelNoise').textContent     = working ? 'computing' : 'ready';
+}
+function setShaderStatus(working){
+  document.getElementById('dotShader').style.background = working ? IND_WORKING : IND_READY;
+  document.getElementById('labelShader').style.color    = working ? IND_WORKING : IND_READY;
+  document.getElementById('labelShader').textContent    = working ? 'compiling' : 'ready';
+}
+function showIndicators(show){
+  document.getElementById('indicators').style.display = show ? 'flex' : 'none';
+  document.getElementById('status').style.display     = show ? 'none' : 'block';
+}
+
+function onSliceAxisChange(axis){
+  currentSliceAxis = axis;
+  document.getElementById('btnAxisX').classList.toggle('active', axis==='x');
+  document.getElementById('btnAxisY').classList.toggle('active', axis==='y');
+  document.getElementById('btnAxisZ').classList.toggle('active', axis==='z');
+  sectionViewer.setAxis(axis);
+}
 
 function onVoidToggle(enabled) {
   voidEnabled = enabled;
@@ -302,6 +365,7 @@ function onVoidToggle(enabled) {
   document.getElementById('btnVoidOn').classList.toggle('active', enabled);
   document.getElementById('voidTypeControl').style.display = enabled ? 'flex' : 'none';
   document.getElementById('voidSliders').style.display = enabled ? 'block' : 'none';
+  document.getElementById('voidHint').style.display = enabled ? 'block' : 'none';
   regenerate();
 }
 
@@ -486,10 +550,14 @@ GridGenerator.prototype.generate = function(params) {
   var SCALE=5.0/Math.PI;
 
   // Generate raw noise using DeterministicNoise
+  var sx=params.scaleX||1.0, sy=params.scaleY||1.0, sz=params.scaleZ||1.0;
   for(var z=0;z<res;z++) for(var y=0;y<res;y++) for(var x=0;x<res;x++){
     var idx=x+y*res+z*res*res;
     var px=(x/res-0.5)*10, py=(y/res-0.5)*10, pz=(z/res-0.5)*10;
-    var v=DeterministicNoise.sample(params, px*params.frequency, py*params.frequency, pz*params.frequency);
+    var v=DeterministicNoise.sample(params,
+      px*params.frequency*sx,
+      py*params.frequency*sy,
+      pz*params.frequency*sz);
     noiseValues[idx]=v;
     if(v<minVal)minVal=v; if(v>maxVal)maxVal=v;
   }
@@ -542,46 +610,15 @@ GridGenerator.prototype.generate = function(params) {
   }
 
   // Normalize and apply slab test: abs(norm - center) - halfwidth
+  // Note: voids are skipped here — section view only shows scaffold surface.
+  // Void evaluation (27-neighbor Worley) at 128³ would be too slow for interactive use.
   var mid=(minVal+maxVal)*0.5;
   var halfRange=Math.max((maxVal-minVal)*0.5,0.001);
   var sign=params.invert?-1:1;
   var grid=new Float32Array(size);
-  var doVoid=params.voidEnabled&&params.holeRadius>0;
-  var SCALE=5.0/Math.PI;
   for(var i=0;i<size;i++){
     var norm=(noiseValues[i]-mid)/halfRange;
-    var scaffold=sign*(Math.abs(norm-params.isoLevel)-params.thickness);
-    if(doVoid){
-      // Reconstruct world position from flat index
-      var iz=Math.floor(i/(res*res));
-      var iy=Math.floor((i-iz*res*res)/res);
-      var ix=i-iz*res*res-iy*res;
-      var wx=(ix/res-0.5)*10*SCALE, wy=(iy/res-0.5)*10*SCALE, wz=(iz/res-0.5)*10*SCALE;
-      var vf;
-      if(params.voidType==='organic'){
-        // Mirror GLSL: snoise with offset seed, in hole-frequency space
-        vf=DeterministicNoise.snoise(wx*params.holeFreq+17.3,wy*params.holeFreq+5.8,wz*params.holeFreq+11.2)-params.holeRadius;
-      } else {
-        // Worley F1
-        var hf=params.holeFreq;
-        var hx=wx*hf,hy=wy*hf,hz=wz*hf;
-        var pix2=Math.floor(hx),piy2=Math.floor(hy),piz2=Math.floor(hz);
-        var pfx2=hx-pix2,pfy2=hy-piy2,pfz2=hz-piz2;
-        var d1min=1e9;
-        for(var oz2=-1;oz2<=1;oz2++) for(var oy2=-1;oy2<=1;oy2++) for(var ox2=-1;ox2<=1;ox2++){
-          var cx2=pix2+ox2,cy2=piy2+oy2,cz2=piz2+oz2;
-          function h3(a,b,c){return Math.abs(Math.sin(a*127.1+b*311.7+c*74.7)*43758.5453)%1;}
-          var rpx2=h3(cx2,cy2,cz2),rpy2=h3(cx2+1,cy2,cz2),rpz2=h3(cx2,cy2+1,cz2);
-          var ddx=ox2+rpx2-pfx2,ddy=oy2+rpy2-pfy2,ddz=oz2+rpz2-pfz2;
-          var dd=Math.sqrt(ddx*ddx+ddy*ddy+ddz*ddz);
-          if(dd<d1min)d1min=dd;
-        }
-        vf=d1min-params.holeRadius;
-      }
-      grid[i]=Math.max(scaffold,-vf);
-    } else {
-      grid[i]=scaffold;
-    }
+    grid[i]=sign*(Math.abs(norm-params.isoLevel)-params.thickness);
   }
   return grid;
 };
@@ -589,31 +626,85 @@ GridGenerator.prototype.generate = function(params) {
 // ── SectionViewer ─────────────────────────────────────────────────────────
 function SectionViewer(canvas){
   this.canvas=canvas; this.ctx=canvas.getContext('2d');
-  this.grid=null; this.resolution=64; this.sliceZ=0.5;
+  this.grid=null; this.resolution=64; this.sliceZ=0.5; this.axis='z';
 }
 SectionViewer.prototype.updateGrid=function(grid,res){this.grid=grid;this.resolution=res;this.render();};
 SectionViewer.prototype.setSlice=function(z){this.sliceZ=z;this.render();};
+SectionViewer.prototype.setAxis=function(axis){this.axis=axis;this.render();};
 SectionViewer.prototype.render=function(){
   if(!this.grid)return;
   var w=this.canvas.clientWidth,h=this.canvas.clientHeight;
   this.canvas.width=w;this.canvas.height=h;
   var res=this.resolution;
   var sliceIdx=Math.floor(this.sliceZ*(res-1));
-  var imageData=this.ctx.createImageData(res,res);
-  for(var y=0;y<res;y++) for(var x=0;x<res;x++){
-    var value=this.grid[x+y*res+sliceIdx*res*res];
-    var r,g,b;
-    if(value<0){var t=Math.min(Math.abs(value)*2,1);r=Math.floor((1-t)*255);g=r;b=255;}
-    else{var t=Math.min(value*2,1);r=255;g=Math.floor((1-t)*255);b=g;}
-    var pi=(x+(res-1-y)*res)*4;
-    imageData.data[pi]=r;imageData.data[pi+1]=g;imageData.data[pi+2]=b;imageData.data[pi+3]=255;
+  var axis=this.axis||'z';
+  var ctx=this.ctx;
+
+  // Helper: read SDF value for display pixel (px, py) given slice axis
+  // px/py are display coords (0..res-1), y is flipped for display
+  function getVal(grid, px, py, si, res){
+    var gx, gy, gz;
+    if(axis==='z'){ gx=px; gy=res-1-py; gz=si; }
+    else if(axis==='y'){ gx=px; gy=si; gz=res-1-py; }
+    else { gx=si; gy=res-1-py; gz=px; } // x
+    return grid[gx + gy*res + gz*res*res];
   }
-  var tc=document.createElement('canvas');tc.width=res;tc.height=res;
+
+  // ── Color fill ────────────────────────────────────────────────────────
+  var imageData=ctx.createImageData(res,res);
+  for(var py=0;py<res;py++) for(var px=0;px<res;px++){
+    var value=getVal(this.grid,px,py,sliceIdx,res);
+    var r,g,b;
+    if(value<0){
+      // Solid material — amber, brighter near surface
+      var t=Math.min(Math.abs(value)*3,1);
+      r=Math.floor(122+t*100); g=Math.floor(78+t*64); b=0;
+    } else {
+      // Void — near-black at surface, soft blue-dark deeper away
+      var t=Math.min(value*3,1);
+      r=Math.floor(6+t*20); g=Math.floor(8+t*18); b=Math.floor(15+t*31);
+    }
+    var pi=(px+py*res)*4;
+    imageData.data[pi]=r; imageData.data[pi+1]=g; imageData.data[pi+2]=b; imageData.data[pi+3]=255;
+  }
+  var tc=document.createElement('canvas'); tc.width=res; tc.height=res;
   tc.getContext('2d').putImageData(imageData,0,0);
-  this.ctx.fillStyle='#000';this.ctx.fillRect(0,0,w,h);
-  var sz=Math.min(w,h)*0.8;
-  this.ctx.imageSmoothingEnabled=false;
-  this.ctx.drawImage(tc,(w-sz)/2,(h-sz)/2,sz,sz);
+  ctx.fillStyle='#06080f'; ctx.fillRect(0,0,w,h);
+  var sz=Math.min(w,h)*0.92;
+  var ox=(w-sz)/2, oy=(h-sz)/2;
+  ctx.imageSmoothingEnabled=true;
+  ctx.imageSmoothingQuality='high';
+  ctx.drawImage(tc,ox,oy,sz,sz);
+
+  // ── Contour overlay ───────────────────────────────────────────────────
+  var cellW=sz/res, cellH=sz/res;
+  ctx.strokeStyle='#22d3ee';
+  ctx.lineWidth=Math.max(1, sz/res*0.6);
+  ctx.lineCap='square';
+  ctx.beginPath();
+
+  for(var py=0;py<res;py++){
+    for(var px=0;px<res;px++){
+      var v=getVal(this.grid,px,py,sliceIdx,res);
+      // Horizontal boundary: check next row
+      if(py<res-1){
+        var vNext=getVal(this.grid,px,py+1,sliceIdx,res);
+        if((v<0)!==(vNext<0)){
+          var cx1=ox+px*cellW, cy1=oy+(py+1)*cellH;
+          ctx.moveTo(cx1,cy1); ctx.lineTo(cx1+cellW,cy1);
+        }
+      }
+      // Vertical boundary: check next column
+      if(px<res-1){
+        var vRight=getVal(this.grid,px+1,py,sliceIdx,res);
+        if((v<0)!==(vRight<0)){
+          var cx2=ox+(px+1)*cellW, cy2=oy+py*cellH;
+          ctx.moveTo(cx2,cy2); ctx.lineTo(cx2,cy2+cellH);
+        }
+      }
+    }
+  }
+  ctx.stroke();
 };
 
 // ── Raymarcher ────────────────────────────────────────────────────────────
@@ -639,7 +730,8 @@ function Raymarcher(canvas){
   this.uThick=null;this.uIso=null;this.uNoiseMin=null;this.uNoiseMax=null;
   this.uSigma=null;this.uInvertSign=null;
   this.uCurlStep=null;this.uPotScale=null;
-  this.uGain=null;this.uLacunarity=null;this.uWarpStrength=null;
+  this.uGain=null;this.uLacunarity=null;this.uWarpStrength=null;this.uOctaves=null;
+  this.uScaleX=null;this.uScaleY=null;this.uScaleZ=null;
   this.uHoleFreq=null;this.uHoleRadius=null;
   this.camZoom=16;this.autoRot=false;this.running=false;this._loopRunning=false;
   this._dirty=true;
@@ -712,18 +804,24 @@ Raymarcher.prototype._mkShader=function(type,src){
 };
 
 Raymarcher.prototype._runPrepass=function(params){
+  if(this.running)setNoiseStatus(true);
   var N=16,SCALE=5.0/Math.PI;
+  var sx=params.scaleX||1.0, sy=params.scaleY||1.0, sz=params.scaleZ||1.0;
   var mn=Infinity,mx=-Infinity;
   for(var zi=0;zi<N;zi++) for(var yi=0;yi<N;yi++) for(var xi=0;xi<N;xi++){
     var px=((xi/(N-1))*2-1)*Math.PI;
     var py=((yi/(N-1))*2-1)*Math.PI;
     var pz=((zi/(N-1))*2-1)*Math.PI;
-    var v=DeterministicNoise.sample(params,px*SCALE*params.frequency,py*SCALE*params.frequency,pz*SCALE*params.frequency);
+    var v=DeterministicNoise.sample(params,
+      px*SCALE*params.frequency*sx,
+      py*SCALE*params.frequency*sy,
+      pz*SCALE*params.frequency*sz);
     if(v<mn)mn=v; if(v>mx)mx=v;
   }
   var range=mx-mn;
   this.noiseMin=mn-range*0.05;
   this.noiseMax=mx+range*0.05;
+  if(this.running)setNoiseStatus(false);
 };
 
 Raymarcher.prototype._buildFrag=function(params){
@@ -788,15 +886,25 @@ Raymarcher.prototype._buildFrag=function(params){
   var fbmCode=needsFbm?[
     'float fbm(vec3 p){',
     ' float v=0.0,a=1.0,f=1.0,mx=0.0;',
-    ' for(int i=0;i<'+octLit+';i++){v+=snoise(p*f)*a;mx+=a;a*=uGain;f*=uLacunarity;}',
+    ' for(int i=0;i<8;i++){if(float(i)>=uOctaves)break;v+=snoise(p*f)*a;mx+=a;a*=uGain;f*=uLacunarity;}',
     ' return v/mx;',
-    '}'
+    '}',
+    // fbm2: fixed 2-octave FBM used for warp q-vector only.
+    // The q-vector only needs smooth displacement — full octave detail is wasted here.
+    // Halves instruction count for the three q-vector evaluations in noiseField.
+    type==='warp'?[
+      'float fbm2(vec3 p){',
+      ' float v=0.0,a=1.0,f=1.0,mx=0.0;',
+      ' for(int i=0;i<2;i++){v+=snoise(p*f)*a;mx+=a;a*=uGain;f*=uLacunarity;}',
+      ' return v/mx;',
+      '}'
+    ].join('\n'):''
   ].join('\n'):'';
 
   var ridgedCode=(type==='ridged')?[
     'float ridged(vec3 p){',
     ' float v=0.0,a=1.0,f=1.0,mx=0.0;',
-    ' for(int i=0;i<'+octLit+';i++){v+=(1.0-abs(snoise(p*f)))*a;mx+=a;a*=uGain;f*=uLacunarity;}',
+    ' for(int i=0;i<8;i++){if(float(i)>=uOctaves)break;v+=(1.0-abs(snoise(p*f)))*a;mx+=a;a*=uGain;f*=uLacunarity;}',
     ' return (v/mx)*2.0-1.0;',
     '}'
   ].join('\n'):'';
@@ -804,7 +912,7 @@ Raymarcher.prototype._buildFrag=function(params){
   var billowCode=(type==='billow')?[
     'float billow(vec3 p){',
     ' float v=0.0,a=1.0,f=1.0,mx=0.0;',
-    ' for(int i=0;i<'+octLit+';i++){v+=abs(snoise(p*f))*a;mx+=a;a*=uGain;f*=uLacunarity;}',
+    ' for(int i=0;i<8;i++){if(float(i)>=uOctaves)break;v+=abs(snoise(p*f))*a;mx+=a;a*=uGain;f*=uLacunarity;}',
     ' return (v/mx)*2.0-1.0;',
     '}'
   ].join('\n'):'';
@@ -832,7 +940,7 @@ Raymarcher.prototype._buildFrag=function(params){
   else if(type==='ridged') noiseFieldCode='float noiseField(vec3 p){return ridged(p);}';
   else if(type==='billow') noiseFieldCode='float noiseField(vec3 p){return billow(p);}';
   else if(type==='curl') noiseFieldCode='float noiseField(vec3 p){return curlField(p);}';
-  else noiseFieldCode='float noiseField(vec3 p){float qx=fbm(p),qy=fbm(p+vec3(5.2,1.3,8.1)),qz=fbm(p+vec3(3.7,9.4,2.8));return fbm(p+uWarpStrength*vec3(qx,qy,qz));}';
+  else noiseFieldCode='float noiseField(vec3 p){float qx=fbm2(p),qy=fbm2(p+vec3(5.2,1.3,8.1)),qz=fbm2(p+vec3(3.7,9.4,2.8));return fbm(p+uWarpStrength*vec3(qx,qy,qz));}';
 
   var voidUniforms=voidEnabled?'uniform float uHoleFreq;\nuniform float uHoleRadius;':'';
   var voidCode=voidEnabled?(
@@ -854,7 +962,8 @@ Raymarcher.prototype._buildFrag=function(params){
     'uniform float freq;uniform float thickness;uniform float isoLevel;',
     'uniform float noiseMin;uniform float noiseMax;',
     'uniform float sigma;uniform float invertSign;',
-    'uniform float uGain;uniform float uLacunarity;uniform float uWarpStrength;',
+    'uniform float uGain;uniform float uLacunarity;uniform float uWarpStrength;uniform float uOctaves;',
+    'uniform float uScaleX;uniform float uScaleY;uniform float uScaleZ;',
     isCurl?'uniform float curlStep;uniform float potScale;':'',
     voidUniforms,
     simplexCode,
@@ -862,12 +971,13 @@ Raymarcher.prototype._buildFrag=function(params){
     noiseFieldCode,
     voidEnabled?voidCode:'',
     'float sampleNoise(vec3 p,float S){',
-    ' if(sigma<0.001)return noiseField(p*S);',
+    ' vec3 sp=p*vec3(uScaleX,uScaleY,uScaleZ);',
+    ' if(sigma<0.001)return noiseField(sp*S);',
     ' float e=sigma*0.5/max(S,0.01);float w=0.60653;',
-    ' float total=noiseField(p*S);',
-    ' total+=w*(noiseField((p+vec3(e,0,0))*S)+noiseField((p-vec3(e,0,0))*S));',
-    ' total+=w*(noiseField((p+vec3(0,e,0))*S)+noiseField((p-vec3(0,e,0))*S));',
-    ' total+=w*(noiseField((p+vec3(0,0,e))*S)+noiseField((p-vec3(0,0,e))*S));',
+    ' float total=noiseField(sp*S);',
+    ' total+=w*(noiseField((sp+vec3(e,0,0))*S)+noiseField((sp-vec3(e,0,0))*S));',
+    ' total+=w*(noiseField((sp+vec3(0,e,0))*S)+noiseField((sp-vec3(0,e,0))*S));',
+    ' total+=w*(noiseField((sp+vec3(0,0,e))*S)+noiseField((sp-vec3(0,0,e))*S));',
     ' return total/(1.0+6.0*w);}',
     'float implicit(vec3 p,float S){',
     ' float raw=sampleNoise(p,S);',
@@ -887,7 +997,8 @@ Raymarcher.prototype._buildFrag=function(params){
     ' float r=clamp(length(uv)*1.1,0.0,1.0);',
     ' vec3 bgCol=mix(vec3(0.07,0.07,0.07),vec3(0.03,0.03,0.03),r*r);',
     ' float S='+SCALE+'*freq;',
-    ' float lipschitz=max(S*2.0,0.1);',
+    ' float maxScale=max(uScaleX,max(uScaleY,uScaleZ));',
+    ' float lipschitz=max(S*maxScale*2.0,0.1);',
     ' float halfR=max((noiseMax-noiseMin)*0.5,0.001);',
     ' float featureSize=thickness*halfR/lipschitz;',
     ' float thresh=featureSize*0.008;',
@@ -946,7 +1057,7 @@ Raymarcher.prototype._submitShader=function(params){
   this._pendingProg=prg;
   this._pendingParams=params;
   this._compiling=true;
-  document.getElementById('status').textContent='Compiling...';
+  setShaderStatus(true);
 };
 
 // Activate a ready program: set up vertex attrib + cache uniform locations
@@ -971,6 +1082,10 @@ Raymarcher.prototype._activateProgram=function(prg){
   this.uGain=gl.getUniformLocation(prg,'uGain');
   this.uLacunarity=gl.getUniformLocation(prg,'uLacunarity');
   this.uWarpStrength=gl.getUniformLocation(prg,'uWarpStrength');
+  this.uOctaves=gl.getUniformLocation(prg,'uOctaves');
+  this.uScaleX=gl.getUniformLocation(prg,'uScaleX');
+  this.uScaleY=gl.getUniformLocation(prg,'uScaleY');
+  this.uScaleZ=gl.getUniformLocation(prg,'uScaleZ');
   this.uCurlStep=gl.getUniformLocation(prg,'curlStep');
   this.uPotScale=gl.getUniformLocation(prg,'potScale');
   this.uHoleFreq=gl.getUniformLocation(prg,'uHoleFreq');
@@ -988,19 +1103,26 @@ Raymarcher.prototype.setParams=function(params){
     params.gain!==prev.gain||
     params.warpStrength!==prev.warpStrength||
     params.distanceMetric!==prev.distanceMetric;
-  var needRebuild=!prev||!this.prog||
+  var needRebuild=(!prev||(!this.prog&&!this._compiling))||
     params.noiseType!==prev.noiseType||
-    params.octaves!==prev.octaves||
     params.distanceMetric!==prev.distanceMetric||
     params.voidEnabled!==prev.voidEnabled||
     params.voidType!==prev.voidType||
     params.quality!==prev.quality;
   this.currentParams=params;
+  // Prepass is CPU-only — always run it (drives section view normalization)
   if(needPrepass)this._runPrepass(params);
-  if(needRebuild)this._submitShader(params,'',true);
+  // Only compile the shader when the 3D canvas is actually visible.
+  // If in section view, mark rebuild as pending — it fires when user switches to 3D.
+  if(needRebuild){
+    if(this.running){
+      this._submitShader(params,'',true);
+    } else {
+      this._rebuildPending=true;
+    }
+  }
   this._dirty=true;
   if(!this._loopRunning)this._startLoop();
-  this.running=true;
 };
 
 Raymarcher.prototype.render=function(){
@@ -1013,10 +1135,11 @@ Raymarcher.prototype.render=function(){
     if(ready){
       if(gl.getProgramParameter(this._pendingProg,gl.LINK_STATUS)){
         this._activateProgram(this._pendingProg);
-        document.getElementById('status').textContent='Ready';
+        setShaderStatus(false);
       } else {
         console.error('Shader link failed:',gl.getProgramInfoLog(this._pendingProg));
         gl.deleteProgram(this._pendingProg);
+        setShaderStatus(false);
         document.getElementById('status').textContent='Shader error — see console';
       }
       this._pendingProg=null;this._compiling=false;this._dirty=true;
@@ -1051,6 +1174,10 @@ Raymarcher.prototype.render=function(){
     if(this.uGain)gl.uniform1f(this.uGain,p.gain||0.5);
     if(this.uLacunarity)gl.uniform1f(this.uLacunarity,p.lacunarity||2.0);
     if(this.uWarpStrength)gl.uniform1f(this.uWarpStrength,p.warpStrength||1.0);
+    if(this.uOctaves)gl.uniform1f(this.uOctaves,p.octaves||4);
+    if(this.uScaleX)gl.uniform1f(this.uScaleX,p.scaleX||1.0);
+    if(this.uScaleY)gl.uniform1f(this.uScaleY,p.scaleY||1.0);
+    if(this.uScaleZ)gl.uniform1f(this.uScaleZ,p.scaleZ||1.0);
     if(this.uCurlStep)gl.uniform1f(this.uCurlStep,p.curlStep||0.1);
     if(this.uPotScale)gl.uniform1f(this.uPotScale,p.potentialScale||1.0);
     if(this.uHoleFreq)gl.uniform1f(this.uHoleFreq,p.holeFreq||1.0);
@@ -1103,6 +1230,9 @@ function getParams(){
     distanceMetric:document.getElementById('distanceMetric').value,
     curlStep:      parseFloat(document.getElementById('curlStep').value),
     potentialScale:parseFloat(document.getElementById('potentialScale').value),
+    scaleX:        parseFloat(document.getElementById('scaleX').value),
+    scaleY:        parseFloat(document.getElementById('scaleY').value),
+    scaleZ:        parseFloat(document.getElementById('scaleZ').value),
     voidEnabled:   voidEnabled,
     voidType:      voidType,
     holeFreq:      parseFloat(document.getElementById('holeFreq').value),
@@ -1131,7 +1261,6 @@ function regenerate(){
     var params=getParams();
     if(currentViewMode==='sheet'){
       raymarcher.setParams(params);
-      document.getElementById('status').textContent='Ready';
     } else {
       document.getElementById('status').textContent='Generating...';
       setTimeout(function(){
@@ -1162,10 +1291,22 @@ function onViewModeChange(mode){
   document.getElementById('sectionCanvas').style.display=isSection?'block':'none';
   if(isSection){
     raymarcher.running=false;
+    showIndicators(false);
     if(currentGrid){sectionViewer.updateGrid(currentGrid,currentResolution);}
     else{regenerate();}
   } else {
-    raymarcher.setParams(getParams()); raymarcher.running=true;
+    showIndicators(true);
+    setNoiseStatus(false);
+    setShaderStatus(false);
+    // Mark running first so setParams knows to compile the shader
+    raymarcher.running=true;
+    // If params changed while in section view, rebuild now
+    if(raymarcher._rebuildPending){
+      raymarcher._rebuildPending=false;
+      raymarcher._submitShader(raymarcher.currentParams,'',true);
+    } else {
+      raymarcher.setParams(getParams());
+    }
   }
 }
 
@@ -1443,7 +1584,9 @@ function buildExportJSON(){
   var hasOctaves=['fbm','ridged','billow','warp'].indexOf(params.noiseType)>=0;
   var surface={
     type:'noise',noise_type:params.noiseType,
-    frequency:params.frequency,center:params.isoLevel,half_width:params.thickness,
+    frequency:params.frequency,
+    scale_x:params.scaleX,scale_y:params.scaleY,scale_z:params.scaleZ,
+    center:params.isoLevel,half_width:params.thickness,
     smoothing:params.smoothing,topology:params.invert?'solid':'sheet',
     octaves:hasOctaves?params.octaves:null,
     lacunarity:hasOctaves?params.lacunarity:null,
@@ -1503,6 +1646,7 @@ function onResChange(res){
   currentResolution=res;
   document.getElementById('btn64').classList.toggle('active',res===64);
   document.getElementById('btn128').classList.toggle('active',res===128);
+  document.getElementById('btn256').classList.toggle('active',res===256);
   regenerate();
 }
 
