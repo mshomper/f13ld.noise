@@ -51,12 +51,58 @@ input[type=number]{font-size:12px;padding:2px 4px;background:#1a1a2e;border:0.5p
 /* homo controls row */
 .homo-controls{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:8px}
 .homo-controls label{font-size:12px;color:#888;display:flex;align-items:center;gap:4px}
+@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@500;700&display=swap');
+.f13ld-header{display:flex;align-items:center;justify-content:space-between;background:#06080f;border-bottom:0.5px solid #1a2a1a;padding:0 14px;height:48px;flex-shrink:0;font-family:'Exo 2',system-ui,sans-serif;}
+.fh-left{display:flex;align-items:center;gap:10px}
+.fh-brand{display:flex;align-items:center;gap:8px;text-decoration:none}
+.fh-wordmark{font-size:17px;font-weight:700;letter-spacing:0.1em;line-height:1}
+.fh-divider{width:0.5px;height:24px;background:#1a2a1a}
+.fh-tool-name{font-size:15px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;line-height:1}
+.fh-right{display:flex;align-items:center;gap:10px}
+.fh-version{font-size:10px;color:#2a3a2a;letter-spacing:0.1em;font-family:'Exo 2',system-ui,sans-serif}
+.fh-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fh-mesh-btn{font-size:11px;padding:4px 12px;border:0.5px solid #1D9E75;border-radius:20px;background:rgba(29,158,117,0.08);color:#1D9E75;cursor:pointer;font-family:inherit;font-weight:600;white-space:nowrap;transition:background 0.15s}
+.fh-mesh-btn:hover{background:rgba(29,158,117,0.18)}
 </style>
 </head>
 <body>
 
 <div id="container">
-  <h1>Noise Scaffold Explorer <span style="font-size:10px;color:#3a3a5a;margin-left:6px">v1.0</span></h1>
+  <div class="f13ld-header">
+  <div class="fh-left">
+    <a class="fh-brand" href="https://f13ld.app" target="_blank">
+      <svg width="24" height="24" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <defs><clipPath id="f13-clip"><path d="M50,5 C91,5 95,9 95,50 C95,91 91,95 50,95 C9,95 5,91 5,50 C5,9 9,5 50,5Z"/></clipPath></defs>
+        <path d="M50,5 C91,5 95,9 95,50 C95,91 91,95 50,95 C9,95 5,91 5,50 C5,9 9,5 50,5Z" fill="#111e13" stroke="#1D9E75" stroke-width="5"/>
+        <g clip-path="url(#f13-clip)" fill="none">
+          <path d="M0,50 Q25,40 50,50 Q75,60 100,50" stroke="#c8f542" stroke-width="6"/>
+          <path d="M50,0 Q40,25 50,50 Q60,75 50,100" stroke="#c8f542" stroke-width="6"/>
+          <path d="M0,31 Q25,21 50,31 Q75,41 100,31" stroke="#2c4e30" stroke-width="3"/>
+          <path d="M0,69 Q25,59 50,69 Q75,79 100,69" stroke="#2c4e30" stroke-width="3"/>
+          <path d="M31,0 Q21,25 31,50 Q41,75 31,100" stroke="#2c4e30" stroke-width="3"/>
+          <path d="M69,0 Q59,25 69,50 Q79,75 69,100" stroke="#2c4e30" stroke-width="3"/>
+          <circle cx="50" cy="50" r="7" fill="#c8f542"/>
+        </g>
+        <path d="M50,5 C91,5 95,9 95,50 C95,91 91,95 50,95 C9,95 5,91 5,50 C5,9 9,5 50,5Z" fill="none" stroke="#1D9E75" stroke-width="5"/>
+      </svg>
+      <div class="fh-wordmark"><span style="color:#1D9E75">F</span><span style="color:#c8f542">1</span><span style="color:#c8f542">3</span><span style="color:#1D9E75">LD</span></div>
+    </a>
+    <div class="fh-divider"></div>
+    <div class="fh-tool-name" style="color:#712B13">NOISE</div>
+  </div>
+  <div class="fh-right">
+    <button class="fh-mesh-btn" onclick="openInMesh()">⬡ Open in F13LD.mesh</button>
+    <span class="fh-version">v1.0</span>
+    <div class="fh-icon" style="background:#FAECE7">
+      <svg width="18" height="18" viewBox="0 0 40 40">
+        <path d="M20 3 Q34 3 37 20 Q34 37 20 37 Q6 37 3 20 Q6 3 20 3Z" stroke="#712B13" stroke-width="1.8" fill="none"/>
+        <path d="M20 10 Q30 10 32 20 Q30 30 20 30 Q10 30 8 20 Q10 10 20 10Z" stroke="#712B13" stroke-width="1.8" fill="none"/>
+        <path d="M20 17 Q24 17 25 20 Q24 23 20 23 Q16 23 15 20 Q16 17 20 17Z" stroke="#712B13" stroke-width="1.8" fill="none"/>
+        <circle cx="20" cy="20" r="2.2" fill="#712B13"/>
+      </svg>
+    </div>
+  </div>
+</div>
   <div id="cw">
     <canvas id="glCanvas" style="display:none;"></canvas>
     <canvas id="sectionCanvas"></canvas>
@@ -1642,6 +1688,13 @@ function buildExportJSON(){
     };
   }
   return out;
+}
+
+
+function openInMesh(){
+  var data=buildExportJSON();
+  var encoded=encodeURIComponent(JSON.stringify(data));
+  window.open('https://mshomper.github.io/f13ld.mesh/?r='+encoded,'_blank');
 }
 
 function onExportJSON(){
