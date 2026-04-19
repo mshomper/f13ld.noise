@@ -35,6 +35,10 @@ hr.divider{border:none;border-top:0.5px solid #2a2a3a;margin:10px 0}
 .mode-strip{display:flex;gap:4px}
 .mode-btn{font-size:11px;padding:3px 10px;border:0.5px solid #3a3a5a;border-radius:20px;background:transparent;color:#888;cursor:pointer}
 .mode-btn.active{background:#7c6ff7;color:#fff;border-color:#7c6ff7}
+#flipBtn{font-size:11px;padding:3px 10px;border:0.5px solid #22d3ee;border-radius:20px;background:transparent;color:#22d3ee;cursor:pointer;display:flex;align-items:center;gap:5px;transition:background 0.15s}
+#flipBtn:hover{background:rgba(34,211,238,0.08)}
+#flipGlyph{display:inline-block;transition:transform 0.25s;line-height:1;font-size:13px}
+#flipGlyph.flipped{transform:rotate(180deg)}
 /* Selects and number inputs */
 select{font-size:12px;padding:3px 6px;background:#1a1a2e;border:0.5px solid #3a3a5a;border-radius:5px;color:#e0e0ff;cursor:pointer;width:100%}
 input[type=number]{font-size:12px;padding:2px 4px;background:#1a1a2e;border:0.5px solid #3a3a5a;border-radius:5px;color:#e0e0ff;width:56px;text-align:center}
@@ -237,7 +241,7 @@ input[type=number]{font-size:12px;padding:2px 4px;background:#1a1a2e;border:0.5p
     <!-- Scaffold geometry -->
     <div class="sec-lbl">scaffold geometry</div>
 
-    <div class="surf-controls" style="margin-bottom:6px">
+    <div class="surf-controls" style="margin-bottom:18px">
       <div class="sc-group" style="margin-bottom:0">
         <label>topology</label>
         <div class="mode-strip">
@@ -245,6 +249,12 @@ input[type=number]{font-size:12px;padding:2px 4px;background:#1a1a2e;border:0.5p
           <button class="mode-btn" id="btnHalf" onclick="onTopologyToggle('half')">Half-solid</button>
           <button class="mode-btn" id="btnSolid" onclick="onTopologyToggle('solid')">Solid</button>
         </div>
+      </div>
+      <div id="flipRow" style="display:none;margin-top:8px;width:100%">
+        <button id="flipBtn" onclick="onFlipHalf()">
+          <span id="flipGlyph">&#9680;</span>
+          <span>flip side</span>
+        </button>
       </div>
     </div>
 
@@ -360,6 +370,7 @@ var currentResolution = 128;
 var currentQuality = 'low';
 var debounceTimer = null;
 var topoMode = 'sheet';
+var halfInvert = false;
 var voidEnabled = false;
 var voidType = 'spherical';
 var currentSliceAxis = 'z';
@@ -420,6 +431,8 @@ function onTopologyToggle(mode) {
   var isHalf=(mode==='half');
   var thEl=document.getElementById('thickness'),thRow=thEl&&thEl.closest('.sc-group');
   if(thRow)thRow.style.display=isHalf?'none':'';
+  document.getElementById('flipRow').style.display=isHalf?'block':'none';
+  if(!isHalf){halfInvert=false;document.getElementById('flipGlyph').classList.remove('flipped');}
   regenerate();
 }
 
@@ -655,9 +668,9 @@ GridGenerator.prototype.generate = function(params) {
   for(var i=0;i<size;i++){
     var norm=(noiseValues[i]-mid)/halfRange;
     var gv;
-    if(params.topoMode==='half')gv=norm-params.isoLevel;
-    else if(params.topoMode==='solid')gv=Math.abs(norm-params.isoLevel)-params.thickness;
-    else gv=params.thickness-Math.abs(norm-params.isoLevel);
+    if(params.topoMode==='half')gv=params.halfInvert?(norm-params.isoLevel):(params.isoLevel-norm);
+    else if(params.topoMode==='solid')gv=params.thickness-Math.abs(norm-params.isoLevel);
+    else gv=Math.abs(norm-params.isoLevel)-params.thickness;
     grid[i]=gv;
   }
   return grid;
@@ -768,7 +781,7 @@ function Raymarcher(canvas){
   this.prog=null; this.quadBuf=null;
   this.uRes=null;this.uRot=null;this.uZoom=null;this.uFreq=null;
   this.uThick=null;this.uIso=null;this.uNoiseMin=null;this.uNoiseMax=null;
-  this.uSigma=null;this.uInvertSign=null;
+  this.uSigma=null;this.uTopoMode=null;this.uHalfInvert=null;
   this.uCurlStep=null;this.uPotScale=null;
   this.uGain=null;this.uLacunarity=null;this.uWarpStrength=null;this.uOctaves=null;
   this.uScaleX=null;this.uScaleY=null;this.uScaleZ=null;
@@ -1003,7 +1016,7 @@ Raymarcher.prototype._buildFrag=function(params){
     'precision highp float;',
     'out vec4 fragColor;',
     'uniform vec2 res;uniform mat3 rot;uniform float zoom;',
-    'uniform float freq;uniform float thickness;uniform float isoLevel;uniform float uTopoMode;',
+    'uniform float freq;uniform float thickness;uniform float isoLevel;uniform float uTopoMode;uniform float uHalfInvert;',
     'uniform float noiseMin;uniform float noiseMax;',
     'uniform float sigma;',
     'uniform float uGain;uniform float uLacunarity;uniform float uWarpStrength;uniform float uOctaves;',
@@ -1031,7 +1044,7 @@ Raymarcher.prototype._buildFrag=function(params){
     ' float mid=(noiseMax+noiseMin)*0.5;',
     ' float halfR=max((noiseMax-noiseMin)*0.5,0.001);',
     ' float norm=(raw-mid)/halfR;',
-    '  float scaffold;','  if(uTopoMode<0.5) scaffold=thickness-abs(norm-isoLevel);','  else if(uTopoMode<1.5) scaffold=norm-isoLevel;','  else scaffold=abs(norm-isoLevel)-thickness;',
+    '  float scaffold;','  if(uTopoMode<0.5) scaffold=abs(norm-isoLevel)-thickness;','  else if(uTopoMode<1.5) scaffold=uHalfInvert<0.5?(isoLevel-norm):(norm-isoLevel);','  else scaffold=thickness-abs(norm-isoLevel);',
     voidEnabled?' return max(scaffold,-voidField(p));':' return scaffold;',
     '}',
     'vec3 boxNormal(vec3 pos,float H){vec3 ap=abs(pos)/H;if(ap.x>ap.y&&ap.x>ap.z)return vec3(sign(pos.x),0.0,0.0);if(ap.y>ap.z)return vec3(0.0,sign(pos.y),0.0);return vec3(0.0,0.0,sign(pos.z));}',
@@ -1130,6 +1143,7 @@ Raymarcher.prototype._activateProgram=function(prg){
   this.uNoiseMax=gl.getUniformLocation(prg,'noiseMax');
   this.uSigma=gl.getUniformLocation(prg,'sigma');
   this.uTopoMode=gl.getUniformLocation(prg,'uTopoMode');
+  this.uHalfInvert=gl.getUniformLocation(prg,'uHalfInvert');
   this.uGain=gl.getUniformLocation(prg,'uGain');
   this.uLacunarity=gl.getUniformLocation(prg,'uLacunarity');
   this.uWarpStrength=gl.getUniformLocation(prg,'uWarpStrength');
@@ -1155,7 +1169,10 @@ Raymarcher.prototype.setParams=function(params){
     params.warpStrength!==prev.warpStrength||
     params.distanceMetric!==prev.distanceMetric||
     params.curlStep!==prev.curlStep||
-    params.potentialScale!==prev.potentialScale;
+    params.potentialScale!==prev.potentialScale||
+    params.scaleX!==prev.scaleX||
+    params.scaleY!==prev.scaleY||
+    params.scaleZ!==prev.scaleZ;
   var needRebuild=(!prev||(!this.prog&&!this._compiling))||
     params.noiseType!==prev.noiseType||
     params.distanceMetric!==prev.distanceMetric||
@@ -1217,6 +1234,7 @@ Raymarcher.prototype.render=function(){
     gl.uniform1f(this.uNoiseMax,this.noiseMax);
     gl.uniform1f(this.uSigma,p.smoothing||0);
     gl.uniform1f(this.uTopoMode,p.topoMode==='half'?1.0:p.topoMode==='solid'?2.0:0.0);
+    gl.uniform1f(this.uHalfInvert,p.halfInvert?1.0:0.0);
     if(this.uGain)gl.uniform1f(this.uGain,p.gain||0.5);
     if(this.uLacunarity)gl.uniform1f(this.uLacunarity,p.lacunarity||2.0);
     if(this.uWarpStrength)gl.uniform1f(this.uWarpStrength,p.warpStrength||1.0);
@@ -1280,7 +1298,7 @@ function getParams(){
     frequency:     parseFloat(document.getElementById('frequency').value),
     isoLevel:      parseFloat(document.getElementById('isoLevel').value),
     thickness:     parseFloat(document.getElementById('thickness').value),
-    invert:        topoMode==='solid',topoMode:topoMode,
+    invert:        topoMode==='solid',topoMode:topoMode,halfInvert:halfInvert,
     smoothing:     parseFloat(document.getElementById('smoothing').value),
     octaves:       parseInt(document.getElementById('octaves').value),
     lacunarity:    parseFloat(document.getElementById('lacunarity').value),
@@ -1333,6 +1351,11 @@ function regenerate(){
   },300);
 }
 
+function onFlipHalf(){
+  halfInvert=!halfInvert;
+  document.getElementById('flipGlyph').classList.toggle('flipped',halfInvert);
+  regenerate();
+}
 function onNoiseTypeChange(){updateControlVisibility();regenerate();}
 
 function onParamChange(input,displayId){
@@ -1537,9 +1560,10 @@ var lastHomogResult=null;
 
 function homoPrepass(params){
   var N=16,SCALE=5.0/Math.PI,mn=Infinity,mx=-Infinity;
+  var sx=params.scaleX||1,sy=params.scaleY||1,sz=params.scaleZ||1;
   for(var zi=0;zi<N;zi++) for(var yi=0;yi<N;yi++) for(var xi=0;xi<N;xi++){
     var px=((xi/(N-1))*2-1)*Math.PI,py=((yi/(N-1))*2-1)*Math.PI,pz=((zi/(N-1))*2-1)*Math.PI;
-    var v=DeterministicNoise.sample(params,px*SCALE*params.frequency,py*SCALE*params.frequency,pz*SCALE*params.frequency);
+    var v=DeterministicNoise.sample(params,px*SCALE*params.frequency*sx,py*SCALE*params.frequency*sy,pz*SCALE*params.frequency*sz);
     if(v<mn)mn=v; if(v>mx)mx=v;
   }
   var range=mx-mn;
@@ -1550,15 +1574,17 @@ function voxelizeNoise(params,noiseMin,noiseMax,N){
   var SCALE=5.0/Math.PI,H=Math.PI,step=2*H/N,N2=N*N;
   var vox=new Uint8Array(N*N*N),nSolid=0;
   var mid=(noiseMin+noiseMax)*0.5,halfR=Math.max((noiseMax-noiseMin)*0.5,0.001);
-  var S=SCALE*params.frequency,sign=params.invert?-1:1;
+  var Sx=SCALE*params.frequency*(params.scaleX||1);
+  var Sy=SCALE*params.frequency*(params.scaleY||1);
+  var Sz=SCALE*params.frequency*(params.scaleZ||1);
   for(var ix=0;ix<N;ix++){var x=-H+(ix+0.5)*step;
     for(var iy=0;iy<N;iy++){var y=-H+(iy+0.5)*step;
       for(var iz=0;iz<N;iz++){var z=-H+(iz+0.5)*step;
-        var raw=DeterministicNoise.sample(params,x*S,y*S,z*S);
+        var raw=DeterministicNoise.sample(params,x*Sx,y*Sy,z*Sz);
         var norm=(raw-mid)/halfR;
         var solid=false;
-        if(params.topoMode==='half')solid=(norm>params.isoLevel);
-        else if(params.topoMode==='solid')solid=(Math.abs(norm-params.isoLevel)<params.thickness);
+        if(params.topoMode==='half')solid=params.halfInvert?(norm<params.isoLevel):(norm>params.isoLevel);
+        else if(params.topoMode==='solid')solid=(Math.abs(norm-params.isoLevel)>params.thickness);
         else solid=(Math.abs(norm-params.isoLevel)<params.thickness);
         if(solid){vox[ix*N2+iy*N+iz]=1;nSolid++;}
       }
@@ -1666,6 +1692,7 @@ function buildExportJSON(){
     offset:params.isoLevel,
     cell_scale:parseFloat((1/Math.max(params.frequency,0.001)).toFixed(3)),
     mode:params.topoMode==='solid'?'solid':params.topoMode==='half'?'half':'shell',
+    half_invert:params.halfInvert||false,
     wall_thickness:params.thickness,
     pipe_radius:null,phase_shift:null,gradient:{enabled:false}
   };
