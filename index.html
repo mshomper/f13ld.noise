@@ -92,7 +92,7 @@ input[type=number]{font-size:12px;padding:2px 4px;background:#1a1a2e;border:0.5p
   </div>
   <div class="fh-right">
     <button class="fh-mesh-btn" onclick="openInMesh()">⬡ Open in F13LD.mesh</button>
-    <span class="fh-version">v1.0</span>
+    <span class="fh-version">v0.9.0</span>
     <div class="fh-icon" style="background:#FAECE7">
       <svg width="18" height="18" viewBox="0 0 40 40">
         <path d="M20 3 Q34 3 37 20 Q34 37 20 37 Q6 37 3 20 Q6 3 20 3Z" stroke="#712B13" stroke-width="1.8" fill="none"/>
@@ -769,7 +769,7 @@ function Raymarcher(canvas){
   var vp=canvas.parentElement;
   canvas.width =Math.max(vp?vp.clientWidth :window.innerWidth||300,1);
   canvas.height=Math.max(vp?vp.clientHeight:Math.round(window.innerHeight*0.5)||300,1);
-  this.gl=canvas.getContext('webgl')||canvas.getContext('experimental-webgl');
+  this.gl=canvas.getContext('webgl2')||canvas.getContext('webgl');
   if(!this.gl){document.getElementById('status').textContent='WebGL not supported';return;}
   var gl=this.gl;
   this._khr=gl.getExtension('KHR_parallel_shader_compile')||null;
@@ -1010,7 +1010,9 @@ Raymarcher.prototype._buildFrag=function(params){
   ):'';
 
   return [
+    '#version 300 es',
     'precision highp float;',
+    'out vec4 fragColor;',
     'uniform vec2 res;uniform mat3 rot;uniform float zoom;',
     'uniform float freq;uniform float thickness;uniform float isoLevel;',
     'uniform float noiseMin;uniform float noiseMax;',
@@ -1071,7 +1073,7 @@ Raymarcher.prototype._buildFrag=function(params){
     ' vec3 tb=(-vec3(H,H,H)-ro)*iv,tt=(vec3(H,H,H)-ro)*iv;',
     ' vec3 tmi=min(tb,tt),tma=max(tb,tt);',
     ' float tEn=max(max(tmi.x,tmi.y),tmi.z);float tEx=min(min(tma.x,tma.y),tma.z);',
-    ' if(tEn>tEx||tEx<0.0){gl_FragColor=vec4(bgCol,1.0);return;}',
+    ' if(tEn>tEx||tEx<0.0){fragColor=vec4(bgCol,1.0);return;}',
     ' float t=max(tEn,0.001);bool hit=false;bool nearCap=false;',
     ' if(implicit(ro+rd*t,S)<0.0){nearCap=true;}',
     ' if(!nearCap){',
@@ -1083,7 +1085,7 @@ Raymarcher.prototype._buildFrag=function(params){
     ' vec3 pos;vec3 n;',
     ' if(nearCap){pos=ro+rd*tEn;n=boxNormal(pos,H);if(dot(n,-rd)<0.0)n=-n;t=tEn;}',
     ' else if(hit){pos=ro+rd*t;n=nrmNoise(pos,nrmE,S);if(dot(n,-rd)<0.0)n=-n;}',
-    ' else{if(implicit(ro+rd*tEx,S)<0.0){pos=ro+rd*tEx;n=boxNormal(pos,H);if(dot(n,-rd)<0.0)n=-n;t=tEx;}else{gl_FragColor=vec4(bgCol,1.0);return;}}',
+    ' else{if(implicit(ro+rd*tEx,S)<0.0){pos=ro+rd*tEx;n=boxNormal(pos,H);if(dot(n,-rd)<0.0)n=-n;t=tEx;}else{fragColor=vec4(bgCol,1.0);return;}}',
     ' float dy=dot(n,vec3(0.0,1.0,0.0)),dz=dot(n,vec3(0.0,0.0,1.0));',
     ' float hue=dy*dy*0.33+dz*dz*0.67;',
     ' vec3 iridBase=palette(hue);vec3 iridShift=palette(hue+0.5);',
@@ -1096,14 +1098,14 @@ Raymarcher.prototype._buildFrag=function(params){
     ' vec3 green=vec3(0.784,0.961,0.259);',
     ' vec3 col=iridBase*diff+vec3(1.0,1.0,1.0)*spec1+green*spec2*0.6+green*rim*0.45;',
     ' col=mix(bgCol,col,exp(-t*0.010));',
-    ' gl_FragColor=vec4(clamp(col,0.0,1.0),1.0);}',
+    ' fragColor=vec4(clamp(col,0.0,1.0),1.0);}',
   ].join('\n');
 };
 
 // Submit a shader for async compilation.
 Raymarcher.prototype._submitShader=function(params){
   var gl=this.gl;
-  var vs='attribute vec2 p;void main(){gl_Position=vec4(p,0.0,1.0);}';
+  var vs='#version 300 es\nin vec2 p;void main(){gl_Position=vec4(p,0.0,1.0);}';
   var fs=this._buildFrag(params);
   var vs_=this._mkShader(gl.VERTEX_SHADER,vs);
   var fs_=this._mkShader(gl.FRAGMENT_SHADER,fs);
@@ -1418,7 +1420,7 @@ function sOrthonorm(m){
 var sgl=null,sprog=null,squadBuf=null,suRes,suRot,suZoom;
 var sRotMat=[1,0,0,0,1,0,0,0,1];
 var sInitialized=false,sZoom=2.6;
-var SVERT='attribute vec2 p;void main(){gl_Position=vec4(p,0.0,1.0);}';
+var SVERT='#version 300 es\nin vec2 p;void main(){gl_Position=vec4(p,0.0,1.0);}';
 
 function buildStiffFrag(Ex,Ey,Ez,Gxy,nu){
   var E=(Ex+Ey+Ez)/3;
@@ -1441,7 +1443,9 @@ function buildStiffFrag(Ex,Ey,Ez,Gxy,nu){
   if(zv)zv.style.color=Acol;
   if(zl){zl.textContent=Albl;zl.style.color=Acol;}
   function f(v){var s=v.toFixed(8);return s.indexOf('.')>=0?s:s+'.0';}
-  return 'precision highp float;\n'+
+  return '#version 300 es\n'+
+'precision highp float;\n'+
+'out vec4 fragColor;\n'+
 'uniform vec2 res;uniform mat3 rot;uniform float zoom;\n'+
 'float S11='+f(S11)+';float Gamma='+f(Gamma)+';float Emax='+f(Emax)+';\n'+
 'float Edir(vec3 n){float w=n.x*n.x*n.y*n.y+n.y*n.y*n.z*n.z+n.z*n.z*n.x*n.x;return 1.0/max(abs(S11-(Gamma*0.5)*w),1e-6);}\n'+
@@ -1454,12 +1458,12 @@ function buildStiffFrag(Ex,Ey,Ez,Gxy,nu){
 '  float r=clamp(length(uv)*1.1,0.0,1.0);\n'+
 '  vec3 bgCol=mix(vec3(0.07,0.09,0.22),vec3(0.01,0.01,0.04),r*r);vec4 bg=vec4(bgCol,1.0);\n'+
 '  float bR=1.15;float b2=dot(ro,rd),c2=dot(ro,ro)-bR*bR;float disc=b2*b2-c2;\n'+
-'  if(disc<0.0){gl_FragColor=bg;return;}\n'+
+'  if(disc<0.0){fragColor=bg;return;}\n'+
 '  float sq=sqrt(disc);float tEn=max(-b2-sq,0.0),tEx=-b2+sq;\n'+
-'  if(tEx<0.0){gl_FragColor=bg;return;}\n'+
+'  if(tEx<0.0){fragColor=bg;return;}\n'+
 '  float t=tEn,hit=-1.0,ss=0.018;float prev=implicit(ro+rd*t);\n'+
 '  for(int i=0;i<280;i++){t+=ss;if(t>tEx)break;float g=implicit(ro+rd*t);if(prev*g<0.0){hit=t-ss*(g/(g-prev));break;}prev=g;}\n'+
-'  if(hit<0.0){gl_FragColor=bg;return;}\n'+
+'  if(hit<0.0){fragColor=bg;return;}\n'+
 '  vec3 pos=ro+rd*hit;vec3 n=nrm(pos);if(dot(n,-rd)<0.0)n=-n;\n'+
 '  float Eval=Edir(normalize(pos));float Enorm=clamp(Eval/Emax,0.0,1.0);\n'+
 '  float dy=dot(n,vec3(0.0,1.0,0.0)),dz=dot(n,vec3(0.0,0.0,1.0));\n'+
@@ -1475,7 +1479,7 @@ function buildStiffFrag(Ex,Ey,Ez,Gxy,nu){
 '  vec3 col=mix(iridBase,iridShift,Enorm*0.35)*diff;\n'+
 '  col+=iridShift*fresnel*0.6;col+=vec3(spec1+spec2);col+=iridShift*rim*0.45;\n'+
 '  col*=(0.7+Enorm*0.4);\n'+
-'  gl_FragColor=vec4(clamp(col,0.0,1.0),1.0);\n'+
+'  fragColor=vec4(clamp(col,0.0,1.0),1.0);\n'+
 '}';
 }
 
@@ -1491,7 +1495,7 @@ function initStiffnessGL(){
   var wrap=document.getElementById('ellcv-wrap');
   var w=Math.max(wrap?wrap.offsetWidth:80,40);
   cv.width=w; cv.height=w;
-  sgl=cv.getContext('webgl');
+  sgl=cv.getContext('webgl2')||cv.getContext('webgl');
   if(!sgl){cv.style.display='none';return false;}
   if(!squadBuf){
     squadBuf=sgl.createBuffer();
@@ -1673,7 +1677,7 @@ function buildExportJSON(){
     pipe_radius:null,phase_shift:null,gradient:{enabled:false}
   };
   var out={
-    meta:{version:'1.0.0',tool:'noise-scaffold-explorer',timestamp:new Date().toISOString(),preset:params.noiseType},
+    meta:{version:'0.9.0',tool:'noise-scaffold-explorer',timestamp:new Date().toISOString(),preset:params.noiseType},
     surface:surface,geometry:geometry
   };
   if(lastHomogResult){
