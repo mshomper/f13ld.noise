@@ -10,7 +10,7 @@ html,body{min-height:100%;background:#06080f;color:#e0e0ff;font-family:system-ui
 #container{display:flex;flex-direction:column;height:100vh}
 #cw{position:relative;background:#06080f;border-radius:12px 12px 0 0;overflow:hidden;border:0.5px solid #2a2a3a;flex:1;min-height:0;margin:16px 14px 0}
 canvas{display:block;width:100%;height:100%}
-#status{position:absolute;top:10px;right:10px;background:rgba(6,8,15,0.85);padding:5px 10px;border-radius:6px;font-size:11px;color:#555;pointer-events:none;border:0.5px solid #2a2a3a;z-index:10}
+#status{position:absolute;bottom:10px;left:10px;background:rgba(6,8,15,0.85);padding:5px 10px;border-radius:6px;font-size:11px;color:#555;pointer-events:none;border:0.5px solid #2a2a3a;z-index:10}
 #indicators{position:absolute;top:10px;left:10px;display:none;gap:8px;flex-direction:column;pointer-events:none;z-index:10}
 #qualityOverlay{position:absolute;bottom:10px;right:10px;display:none;gap:4px;z-index:10}
 #qualityOverlay button{background:rgba(6,8,15,0.85);color:#555;border:0.5px solid #2a2a3a;border-radius:5px;font-size:10px;padding:3px 7px;cursor:pointer;transition:color 0.15s,border-color 0.15s}
@@ -67,6 +67,8 @@ input[type=number]{font-size:12px;padding:2px 4px;background:#1a1a2e;border:0.5p
 .fh-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .fh-mesh-btn{font-size:11px;padding:4px 12px;border:0.5px solid #1D9E75;border-radius:20px;background:rgba(29,158,117,0.08);color:#1D9E75;cursor:pointer;font-family:inherit;font-weight:600;white-space:nowrap;transition:background 0.15s}
 .fh-mesh-btn:hover{background:rgba(29,158,117,0.18)}
+
+#axisCanvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:12;display:none}
 </style>
 </head>
 <body>
@@ -109,7 +111,8 @@ input[type=number]{font-size:12px;padding:2px 4px;background:#1a1a2e;border:0.5p
 </div>
   <div id="cw">
     <canvas id="glCanvas" style="display:none;"></canvas>
-    <canvas id="sectionCanvas"></canvas>
+    <canvas id="axisCanvas"></canvas>
+  <canvas id="sectionCanvas"></canvas>
     <div id="status">Ready</div>
     <div id="indicators">
       <div class="ind-pill">
@@ -821,7 +824,10 @@ Raymarcher.prototype._orthonorm=function(m){
   return[x[0],x[1],x[2],y[0],y[1],y[2],z[0],z[1],z[2]];
 };
 Raymarcher.prototype._applyDelta=function(dx,dy){
-  if(Math.abs(dx)>0.001){this.rotMat=this._mat3Mul(this._rotAA(0,1,0,dx*0.007),this.rotMat);this._dirty=true;}
+  if(Math.abs(dx)>0.001){
+    var ux=this.rotMat[3],uy=this.rotMat[4],uz=this.rotMat[5];
+    this.rotMat=this._mat3Mul(this._rotAA(ux,uy,uz,-dx*0.007),this.rotMat);this._dirty=true;
+  }
   if(Math.abs(dy)>0.001){
     var rx=this.rotMat[0],ry=this.rotMat[1],rz=this.rotMat[2];
     this.rotMat=this._mat3Mul(this._rotAA(rx,ry,rz,-dy*0.007),this.rotMat);this._dirty=true;
@@ -1248,6 +1254,7 @@ Raymarcher.prototype.render=function(){
     if(this.uHoleRadius)gl.uniform1f(this.uHoleRadius,p.holeRadius||0.3);
   }
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  drawAxisGizmo(this.rotMat,this.canvas.clientWidth,this.canvas.clientHeight,this.camZoom);
   this._dirty=false;
 };
 
@@ -1289,6 +1296,53 @@ window.addEventListener('beforeunload',function(){
 
 // ── Orchestration ─────────────────────────────────────────────────────────
 var gridGen=new GridGenerator();
+// ── Axis labels on cube edges ─────────────────────────────────────────────
+function drawAxisGizmo(rotMat,canvasW,canvasH,camZoom){
+  var cv=document.getElementById('axisCanvas');
+  if(!cv||cv.style.display==='none')return;
+  var dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.width=Math.round(canvasW*dpr);cv.height=Math.round(canvasH*dpr);
+  var ctx=cv.getContext('2d');
+  ctx.scale(dpr,dpr);ctx.clearRect(0,0,canvasW,canvasH);
+  var H=Math.PI;
+  // Camera sits at rotMat*(0,0,zoom) so its world position direction = col 2 of rotMat
+  var cx=rotMat[6],cy=rotMat[7],cz=rotMat[8];
+  function proj(p){
+    var tx=rotMat[0]*p[0]+rotMat[1]*p[1]+rotMat[2]*p[2];
+    var ty=rotMat[3]*p[0]+rotMat[4]*p[1]+rotMat[5]*p[2];
+    var tz=rotMat[6]*p[0]+rotMat[7]*p[1]+rotMat[8]*p[2];
+    var pcz=tz-camZoom;if(pcz>-0.1)return null;
+    var s=Math.min(canvasW,canvasH);
+    return[canvasW/2+(-1.6*tx/pcz)*s,canvasH/2-(-1.6*ty/pcz)*s];
+  }
+  // Each label is on an edge shared by two faces.
+  // vis = max dot-product of both adjacent face normals with camera direction.
+  // Positive = face points toward camera. Fade label in/out on this value.
+  // X label at (0, +H, -H): adjacent faces y=+H (normal 0,1,0) and z=-H (normal 0,0,-1)
+  // Y label at (-H, 0, -H): adjacent faces x=-H (normal -1,0,0) and z=-H (normal 0,0,-1)
+  // Z label at (-H, +H, 0): adjacent faces x=-H (normal -1,0,0) and y=+H (normal 0,1,0)
+  var axes=[
+    {p:[0,H,-H],  color:'#22d3ee',label:'X', vis:Math.max(cy,-cz)},
+    {p:[-H,0,-H], color:'#e879f9',label:'Y', vis:Math.max(-cx,-cz)},
+    {p:[-H,H,0],  color:'#facc15',label:'Z', vis:Math.max(-cx,cy)}
+  ];
+  ctx.font='bold 13px system-ui,sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  axes.forEach(function(ax){
+    var alpha=Math.min(1,Math.max(0,ax.vis*4));
+    if(alpha<0.01)return;
+    var s=proj(ax.p);if(!s)return;
+    var m=16;
+    s[0]=Math.max(m,Math.min(canvasW-m,s[0]));
+    s[1]=Math.max(m,Math.min(canvasH-m,s[1]));
+    ctx.globalAlpha=alpha*0.7;ctx.fillStyle='rgba(0,0,0,1)';
+    ctx.fillText(ax.label,s[0]+1,s[1]+1);
+    ctx.globalAlpha=alpha;ctx.fillStyle=ax.color;
+    ctx.fillText(ax.label,s[0],s[1]);
+    ctx.globalAlpha=1;
+  });
+}
+
 var raymarcher=new Raymarcher(document.getElementById('glCanvas'));
 var sectionViewer=new SectionViewer(document.getElementById('sectionCanvas'));
 
@@ -1371,7 +1425,7 @@ function onViewModeChange(mode){
   document.getElementById('btnViewSection').classList.toggle('active', isSection);
   document.getElementById('sliceControl').style.display=isSection?'flex':'none';
   document.getElementById('glCanvas').style.display=isSection?'none':'block';
-  document.getElementById('sectionCanvas').style.display=isSection?'block':'none';
+  document.getElementById('sectionCanvas').style.display=isSection?'block':'none';document.getElementById('axisCanvas').style.display=isSection?'none':'block';
   if(isSection){
     raymarcher.running=false;
     showIndicators(false);
@@ -1616,7 +1670,7 @@ function runNoiseHomogenization(params,N,Es,nu){
   var v=voxelizeNoise(params,bounds.noiseMin,bounds.noiseMax,N);
   var rho=v.nSolid/(N*N*N);
   var mil=computeMIL(v.vox,N);
-  var hx=1/(mil.milX*mil.milX),hy=1/(mil.milY*mil.milY),hz=1/(mil.milZ*mil.milZ);
+  var hx=mil.milX*mil.milX,hy=mil.milY*mil.milY,hz=mil.milZ*mil.milZ;
   var hmean=(hx+hy+hz)/3;
   var wx=hx/hmean,wy=hy/hmean,wz=hz/hmean;
   var hs=hsPlus(Es,nu,rho);
