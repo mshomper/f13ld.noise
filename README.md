@@ -4,6 +4,8 @@
 
 🔗 **[Launch → F13LD.noise](https://mshomper.github.io/f13ld.noise)**
 
+<img width="1226" height="968" alt="f13ld noise git image" src="https://github.com/user-attachments/assets/dcfdf569-7319-408e-bd18-15f930586381" />
+
 A browser-based implicit field explorer for generating stochastic scaffold geometry from mathematical noise fields. Seven noise types share a common design pipeline: interactive 2D section view with X/Y/Z slicing, WebGL raymarched 3D preview, MIL-HS mechanical homogenization, STL mesh export, and JSON export for downstream validation.
 
 All geometry is fully implicit — no meshes, no STL intermediates at the design stage. Structure is defined as a scalar field evaluated on demand at any point in space.
