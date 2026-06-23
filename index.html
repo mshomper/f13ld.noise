@@ -759,7 +759,7 @@ Raymarcher.prototype._mkShader=function(type,src){
 
 Raymarcher.prototype._runPrepass=function(params){
   if(this.running)setNoiseStatus(true);
-  var N=16,SCALE=5.0/Math.PI;
+  var N=32,SCALE=5.0/Math.PI;
   var sx=params.scaleX||1.0, sy=params.scaleY||1.0, sz=params.scaleZ||1.0;
   var mn=Infinity,mx=-Infinity;
   for(var zi=0;zi<N;zi++) for(var yi=0;yi<N;yi++) for(var xi=0;xi<N;xi++){
@@ -1724,6 +1724,8 @@ function buildExportJSON(){
     vein_turbulence:params.noiseType==='veined'?params.veinTurb:null,
     vein_frequency:params.noiseType==='veined'?params.veinFreq:null,
     seed:parseFloat(document.getElementById('seed').value),
+    norm_min:raymarcher.noiseMin,
+    norm_max:raymarcher.noiseMax,
     curl_step:params.noiseType==='curl'?params.curlStep:null,
     potential_scale:params.noiseType==='curl'?params.potentialScale:null
   };
