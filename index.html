@@ -624,6 +624,7 @@ var DeterministicNoise = (function() {
 
   function sample(params, sx, sy, sz) {
     if(params.seedOffset){sx+=params.seedOffset[0];sy+=params.seedOffset[1];sz+=params.seedOffset[2];}
+    if(params.noiseType==='simplex') return snoise(sx,sy,sz);
     if(params.noiseType==='cellular') return cellular(sx,sy,sz,params.distanceMetric,params.jitter);
     if(params.noiseType==='fbm') return fbm(sx,sy,sz,params.octaves,params.lacunarity,params.gain);
     if(params.noiseType==='ridged') return ridged(sx,sy,sz,params.octaves,params.lacunarity,params.gain);
