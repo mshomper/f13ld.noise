@@ -1119,6 +1119,7 @@ Raymarcher.prototype._buildFrag=function(params){
       :'vec3 nrmNoise(vec3 p,float e,float S){float ex=implicit(p+vec3(e,0,0),S)-implicit(p-vec3(e,0,0),S);float ey=implicit(p+vec3(0,e,0),S)-implicit(p-vec3(0,e,0),S);float ez=implicit(p+vec3(0,0,e),S)-implicit(p-vec3(0,0,e),S);return normalize(vec3(ex,ey,ez));}',
     // F13LD shared viewer shading — f13Map = noise SDF clipped to the visible box
     'float f13S;float f13Lip;vec3 f13Lo;vec3 f13Hi;',
+    // f13Lip is the local field gradient at the hit (set below), not the global bound
     'float f13Map(vec3 p){vec3 c=(f13Lo+f13Hi)*0.5;vec3 q=abs(p-c)-(f13Hi-f13Lo)*0.5;float b=length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0);return max(implicit(p,f13S)/f13Lip,b);}',
     F13_SHADE_GLSL,
     'void main(){',
@@ -1161,6 +1162,7 @@ Raymarcher.prototype._buildFrag=function(params){
     ' else if(hit){pos=ro+rd*t;n=nrmNoise(pos,nrmE,S);if(dot(n,-rd)<0.0)n=-n;}',
     ' else{if(implicit(ro+rd*tEx,S)<0.0){pos=ro+rd*tEx;if(uClipAxis>0.5&&abs(dot(pos,axM)-cp)<0.01*H){n=normalize(axM*sign(uClipSide));isClipCap=true;}else n=boxNormal(pos,H);if(dot(n,-rd)<0.0)n=-n;t=tEx;}else{fragColor=vec4(bgCol,1.0);return;}}',
     // Cap hits (box or clip plane) are cut faces. NOISE family color #ea7050.
+    ' if(hit){float e=nrmE;vec3 g=vec3(implicit(pos+vec3(e,0,0),S)-implicit(pos-vec3(e,0,0),S),implicit(pos+vec3(0,e,0),S)-implicit(pos-vec3(0,e,0),S),implicit(pos+vec3(0,0,e),S)-implicit(pos-vec3(0,0,e),S))/(2.0*e);f13Lip=clamp(length(g),0.05,lipschitz);}',
     ' vec3 col=f13Shade(vec3(0.918,0.439,0.314),pos,n,rd,rot,!hit,min(2.0/max(S,0.01),H),nrmE,1.6*H);',
     ' if(isClipCap){vec3 axisCol=uClipAxis<1.5?vec3(0.1333,0.8275,0.9333):(uClipAxis<2.5?vec3(0.9098,0.4745,0.9765):vec3(0.9804,0.8000,0.0824));col=mix(col,axisCol,0.30);}',
     ' col=mix(bgCol,col,exp(-t*0.010));',
