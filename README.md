@@ -6,7 +6,7 @@
 
 <img width="1226" height="968" alt="f13ld noise git image" src="https://github.com/user-attachments/assets/dcfdf569-7319-408e-bd18-15f930586381" />
 
-A browser-based implicit field explorer for generating stochastic scaffold geometry from mathematical noise fields. Seven noise types share a common design pipeline: interactive 2D section view with X/Y/Z slicing, WebGL raymarched 3D preview, MIL-HS mechanical homogenization, STL mesh export, and JSON export for downstream validation.
+A browser-based implicit field explorer for generating stochastic scaffold geometry from mathematical noise fields. Ten noise types share one design pipeline: a GPU-baked, raymarched 3D preview with an X/Y/Z clip plane, MIL-HS mechanical homogenization, and recipe handoff to F13LD.mesh (watertight 3MF), F13LD.lab (FFT homogenization) and F13LD.queue.
 
 All geometry is fully implicit — no meshes, no STL intermediates at the design stage. Structure is defined as a scalar field evaluated on demand at any point in space.
 
@@ -16,7 +16,7 @@ All geometry is fully implicit — no meshes, no STL intermediates at the design
 
 Periodic lattices (TPMS, BCC, FCC) offer predictable but rigid geometry. Real biological structures — trabecular bone, open-cell cartilage, vascular networks — are stochastic: they achieve mechanical efficiency through statistical rather than crystallographic order. This tool lets you explore that design space.
 
-The seven noise types occupy distinct positions in the stochastic geometry landscape:
+The noise types occupy distinct positions in the stochastic geometry landscape:
 
 | Noise type | Mechanism | Natural topology | Beam character | Directional control |
 |---|---|---|---|---|
@@ -27,21 +27,23 @@ The seven noise types occupy distinct positions in the stochastic geometry lands
 | Billow | `|simplex|` per octave | Rounded lobes | Low | None |
 | Domain Warped | FBM-displaced FBM | Flowing organic | Low | None |
 | Curl | Divergence-free ∇×Ψ | Tube networks | High | Via potential scale |
+| Veined | `sin(x·f + turb·fbm)` | Laminar sheets / striations | Low | Banding along X |
+| Foam (F2) | 2nd-nearest Voronoi distance | Rounded closed cells | None | Via metric |
+| Strut network (F3−F1) | Voronoi edges | Round struts (open-cell foam, trabecular rods) | High | Via metric |
 
 ---
 
 ## Usage
 
-Open `index.html` in Chrome or Edge alongside `mesher.js` in the same directory. No server, no build step, no dependencies.
+Open `index.html` in a browser with WebGL2 (Chrome, Edge, Firefox, Safari 15+). One file, no build step, no dependencies.
 
 **Recommended workflow:**
 
 1. Select a noise type and set axis scaling for any desired anisotropy
-2. Explore parameters in **Section 2D** — fast, interactive, full resolution; toggle X/Y/Z slice axis to read the 3D field structure
-3. Switch to **Sheet 3D** to read spatial character and surface quality
-4. Adjust topology (Sheet / Solid) and scaffold geometry parameters
-5. Run **homogenization** to get estimated mechanical properties
-6. **Export STL** for physical validation prints, or **Export JSON** for downstream pipeline handoff
+2. Shape it in the 3D view — center, half-width, topology and the clip plane update instantly; field settings re-bake in a fraction of a second
+3. Use the **X / Y / Z** clip pills to look inside the structure
+4. Run **homogenization** for a quick stiffness estimate
+5. Hand the recipe on: **⬡ Mesh** for a watertight, printable 3MF, **▦ Lab** for the FFT solver, **⊕ Queue** to save it, or **Export JSON**
 
 ---
 
@@ -118,7 +120,7 @@ q(x) = fbm(x)
 φ(x) = fbm(x + strength · q(x))
 ```
 
-Applies FBM displacement to the input coordinates before evaluating the final FBM. The q-vector is evaluated at 2 octaves for performance; the final field uses full octave count. Produces flowing, non-repeating geometry with no straight features.
+Applies FBM displacement to the input coordinates before evaluating the final FBM. The displacement uses the first 2 octaves (min(octaves, 2)); the final field uses the full octave count. Produces flowing, non-repeating geometry with no straight features.
 
 **Additional parameter:**
 - **Warp strength** — magnitude of the displacement field. 0 = no warp. 1–2 = organic flow. 3+ = extreme folding.
@@ -132,13 +134,13 @@ Applies FBM displacement to the input coordinates before evaluating the final FB
 cx = (∂Ψz/∂y − ∂Ψy/∂z)
 ```
 
-Takes the curl of a simplex-derived vector potential via forward-difference finite differences (9 snoise calls per evaluation). Produces a divergence-free field whose magnitude forms connected tube networks — the closest noise analog to vascular trees and Haversian canals.
+Takes the curl of a simplex-derived vector potential via forward-difference finite differences (9 snoise calls per evaluation). Produces a field whose magnitude forms connected tube networks — the closest noise analog to vascular trees and Haversian canals.
 
 **Additional parameters:**
 - **Curl step** — finite-difference step size. Smaller = more accurate; larger = softer tube geometry.
 - **Potential scale** — spatial frequency of the underlying vector potential.
 
-> **Performance note:** Curl requires 9 snoise calls per ray step vs 1 for simplex. Shader compilation is longer and the 3D view is slower. Section 2D is recommended for parameter exploration.
+> **Performance note:** Curl needs 9 snoise calls per field sample, so its bake takes longest; once baked it orbits as fast as any other type.
 
 ---
 
@@ -157,7 +159,7 @@ Stretches or compresses the noise field independently along each world axis, int
 | Features compressed along axis | Isotropic (default) | Features elongated along axis |
 | Denser pores, thicker walls | — | Coarser pores, thinner walls |
 
-Range: 0.25–4.0. The Lipschitz constant used by the raymarcher automatically accounts for the maximum axis scale. Homogenization reads the anisotropic field and reports directional moduli that reflect the scaling — providing a direct design handle on stiffness anisotropy.
+Range: 0.25–4.0. The preview's step bound is measured from the field itself, so it follows the axis scaling automatically. Homogenization reads the anisotropic field and reports directional moduli that reflect the scaling — providing a direct design handle on stiffness anisotropy.
 
 ---
 
@@ -172,24 +174,6 @@ Range: 0.25–4.0. The Lipschitz constant used by the raymarcher automatically a
 
 - **Center** — shifts the isosurface threshold. Primary volume fraction control.
 - **Half-width** — slab thickness. Low values produce thin-wall open-pore scaffolds.
-- **Smoothing** — separable box-filter blur before isosurface extraction. Most useful with Cellular noise.
-
----
-
-## Perforation (Secondary Porosity)
-
-Carves a second population of discrete voids through the scaffold via Boolean subtraction:
-
-```
-SDF_final = max(SDF_scaffold, −SDF_void)
-```
-
-- **Spherical** — Voronoi F1 nearest-cell field. Spherical voids at randomized positions, analogous to the lacunar-canalicular network in cortical bone.
-- **Organic** — offset simplex field. Irregular cave-like voids with smooth boundaries.
-
-**Parameters:** Hole frequency and radius are live uniforms — no shader recompile on change.
-
-> Perforation is disabled in Section 2D for performance. Fully visible in Sheet 3D.
 
 ---
 
@@ -215,30 +199,18 @@ Estimates effective elastic properties from the voxelized scalar field using the
 
 ## Mesh Export
 
-`mesher.js` must be present in the same directory as `index.html`.
-
-| Resolution | Approx. time (simplex) | Approx. time (curl) | Typical triangle count |
-|---|---|---|---|
-| 64³ | ~1s | ~4s | ~50K |
-| 128³ | ~8s | ~30s | ~200K |
-| 256³ | ~60s | ~4min | ~800K |
-
-Pipeline: scalar field sampling → marching cubes → Taubin λ/μ smoothing (λ=0.5, μ=−0.53, 10 iterations) → quality check → binary STL download.
-
-**Quality report** — triangle count, watertight status, boundary edges, non-manifold edges.
-
-> 256³ is not recommended for Curl in the browser.
+Meshing lives in [F13LD.mesh](https://mshomper.github.io/f13ld.mesh): the **⬡ Mesh** button opens the current recipe there, where it becomes a watertight 3MF (Draft / Standard / Fine, any part size, shape clipping, multibody assemblies). F13LD.mesh builds from the same noise math as the preview.
 
 ---
 
 ## Export JSON
 
-The exported JSON carries the complete parameter set and, if homogenization has been run, the mechanical results. Compatible with `mesher.js` for offline mesh generation and forward-compatible with Lattica.mesh (in development).
+The exported JSON carries the complete parameter set, the normalization range (`norm_min` / `norm_max`) and, if homogenization has been run, the mechanical results. F13LD.mesh, F13LD.lab, F13LD.sweep and F13LD.vault read it.
 
 ```json
 {
   "meta": {
-    "version": "1.0.0",
+    "version": "0.12.0",
     "tool": "noise-scaffold-explorer",
     "timestamp": "...",
     "preset": "simplex"
@@ -246,13 +218,15 @@ The exported JSON carries the complete parameter set and, if homogenization has 
   "surface": {
     "type": "noise",
     "noise_type": "simplex",
+    "noise_rev": 2,
     "frequency": 0.3,
     "scale_x": 1.0,
     "scale_y": 1.0,
     "scale_z": 1.0,
     "center": 0.0,
     "half_width": 0.15,
-    "smoothing": 0.0,
+    "norm_min": -1.11,
+    "norm_max": 1.17,
     "topology": "sheet"
   },
   "geometry": {
@@ -269,6 +243,15 @@ The exported JSON carries the complete parameter set and, if homogenization has 
 }
 ```
 
+### Noise revisions (`surface.noise_rev`)
+
+| Revision | Written by | What it is |
+|---|---|---|
+| 1 (field absent) | F13LD.noise ≤ v0.11.0 | Legacy. The CPU simplex picked lattice gradients with a truncated 1/7 and a float fold test, so its field (and the exported part) differed from the 3D preview. Mesh, Lab and Sweep keep building it exactly as before; F13LD.vault no longer accepts it. |
+| 2 | F13LD.noise v0.12.0+ | Fixed. Integer lattice (permutation, gradient index, fold test) and a PCG3D integer cell hash for the Worley types, so the GPU preview and every downstream tool compute the same field. Domain warp displaces with min(octaves, 2) octaves. |
+
+Details and the parity checks: [`docs/NOISE_REV2.md`](docs/NOISE_REV2.md).
+
 ---
 
 ## Part of the F13LD Suite
@@ -283,13 +266,13 @@ The exported JSON carries the complete parameter set and, if homogenization has 
 
 ## Technical Notes
 
-**Fully implicit principle** — all geometry is defined as a scalar field evaluated pointwise. No mesh generation or STL intermediates exist during design. The STL export invokes marching cubes intentionally as a fabrication step.
+**Fully implicit principle** — all geometry is defined as a scalar field evaluated pointwise. No mesh generation or STL intermediates exist during design. Meshing happens once, as a fabrication step, in F13LD.mesh.
 
-**Sheet 3D** — WebGL1 sphere tracer. The Lipschitz constant is estimated from the noise gradient bound and current axis scaling. Internal render resolution is capped at 420px; CSS upscaling handles display. Shader compilation is asynchronous (KHR_parallel_shader_compile); the shader indicator shows amber while compiling and cyan when ready. Switching between noise types that require different GLSL programs triggers a recompile.
+**3D preview (v0.12.0)** — the normalized field is baked on the GPU into a 3D texture (96³ / 144³ / 192³ for Low / Med / High, 16-bit values in an RG8 texture), a few slices per frame, then a single generic shader marches the texture. Center, half-width, topology, flip and the clip plane are uniforms — they never re-bake. Only the bake shader depends on the noise type; it compiles asynchronously and is cached. The march catches sign changes and bisects to the surface, so thin walls never slip between steps. The view drops to reduced resolution while you orbit or drag a slider. The GLSL noise is checked against the CPU library by `tests/gpu-parity.js`.
 
-**Section 2D** — CPU rasterization of the scalar field at the chosen axis/position. Accurate for all noise types at all parameter values. Toggle X/Y/Z to read field anisotropy introduced by axis scaling. Recommended for parameter exploration, particularly for Curl and Domain Warp.
+**Normalization** — a 32³ scan over the preview cube sets the range that maps the raw noise to roughly [-1, 1]. The preview, the homogenization and the export (`norm_min` / `norm_max`) all use it, and F13LD.lab / F13LD.sweep recompute it the same way.
 
-**Browser compatibility** — Chrome and Edge recommended. Firefox supported. WebGL1 required for Sheet 3D. Section 2D functions without WebGL.
+**Browser compatibility** — WebGL2 required for the 3D view. Homogenization and export work without it.
 
 ---
 
